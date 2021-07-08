@@ -31,7 +31,7 @@ spec:
         - secretRef:
             name: {{ .Values.name }}-secret
         env:
-        - name: LODESTAR_ACTIVITY_GIT_TAG
+        - name: LODESTAR_PARTICIPANTS_GIT_TAG
           value: {{ .Values.imageTag }}
         readinessProbe:
           httpGet:

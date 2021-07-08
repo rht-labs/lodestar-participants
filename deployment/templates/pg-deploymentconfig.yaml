@@ -24,17 +24,17 @@ spec:
         - name: POSTGRESQL_USER
           valueFrom:
             secretKeyRef:
-              key: POSTGRESQL_USER
+              key: PARTICIPANTS_POSTGRESQL_USER
               name: "{{ .Values.name }}-secret"
         - name: POSTGRESQL_PASSWORD
           valueFrom:
             secretKeyRef:
-              key: POSTGRESQL_PASSWORD
+              key: PARTICIPANTS_POSTGRESQL_PASSWORD
               name: "{{ .Values.name }}-secret"
         - name: POSTGRESQL_DATABASE
           valueFrom:
             secretKeyRef:
-              key: POSTGRESQL_DATABASE
+              key: PARTICIPANTS_POSTGRESQL_DATABASE
               name: "{{ .Values.name }}-secret"
         image: ' '
         imagePullPolicy: IfNotPresent

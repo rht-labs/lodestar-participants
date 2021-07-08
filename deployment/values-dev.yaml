@@ -18,7 +18,6 @@ db:
   user: sourdough
   password: bread
   name: participantsdb
-  adminPassword: password
   url: jdbc:postgresql://localhost:5432/participantsdb
 
 api:

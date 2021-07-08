@@ -30,12 +30,19 @@ class ParticipantServiceTest {
     
     @BeforeEach
     void init() {
+        participantService.purge();
         participantService.refresh();
     }
     
     @Test
     void testRefresh() {
+        participantService.purge();
         participantService.refresh();
+        
+        for(Participant p : participantService.getParticipantsPage(0, 10)) {
+            System.out.println(p);
+        }
+        
         assertEquals(6, participantService.getParticipantCount());
     }
     

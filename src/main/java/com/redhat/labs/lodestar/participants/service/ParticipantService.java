@@ -79,10 +79,10 @@ public class ParticipantService {
 
         LOGGER.debug("Engagement count {}", engagements.size());
         engagements.parallelStream().forEach(this::reloadEngagement);
-        
+
         LOGGER.debug("refresh complete");
     }
-    
+
     @Transactional
     public long purge() {
         LOGGER.info("Purging participants db");
@@ -92,19 +92,19 @@ public class ParticipantService {
     @Transactional
     public void reloadEngagement(Engagement e) {
         LOGGER.debug("Reloading {}", e);
-        
+
         if(e.getUuid() == null) {
             LOGGER.error("PROJECT {} DOES NOT HAVE AN ENGAGEMENT UUID ON THE DESCRIPTION", e.getProjectId());
         } else {
 
             List<Participant> participants = getParticipantsFromGitlab(String.valueOf(e.getProjectId()));
-    
+
             for (Participant participant : participants) {
                 LOGGER.trace("u {}", participant);
                 participant.setProjectId(e.getProjectId());
                 participant.setEngagementUuid(e.getUuid());
             }
-    
+
             deleteParticipants(e.getUuid());
             participantRepository.persist(participants);
         }
@@ -117,35 +117,40 @@ public class ParticipantService {
     public List<Participant> getParticipants(String engagementUuid) {
         return participantRepository.list(ENGAGEMENT_UUID, Sort.by("uuid", Direction.Descending), engagementUuid);
     }
-    
+
     public List<Participant> getParticipantsAcrossEngagements(int page, int pageSize, List<String> engagementUuids) {
-        return participantRepository.find(ENGAGEMENT_UUID + " IN (?1)", Sort.by("uuid", Direction.Descending), engagementUuids).page(Page.of(page, pageSize)).list();
+        return participantRepository
+                .find(ENGAGEMENT_UUID + " IN (?1)", Sort.by("uuid", Direction.Descending), engagementUuids)
+                .page(Page.of(page, pageSize)).list();
     }
-    
+
     public long getParticipantsAcrossEngagementsCount(List<String> engagementUuids) {
         return participantRepository.count(ENGAGEMENT_UUID + " IN (?1)", engagementUuids);
     }
 
     public List<Participant> getParticipantsPage(int page, int pageSize) {
-        return participantRepository.findAll(Sort.by("uuid", Direction.Descending)).page(Page.of(page, pageSize)).list();
+        return participantRepository.findAll(Sort.by("uuid", Direction.Descending)).page(Page.of(page, pageSize))
+                .list();
     }
 
     public long getParticipantCount() {
         return participantRepository.count();
     }
-    
-    public void updateParticipants(List<Participant> participants, String engagementUuid, String authorEmail, String authorName) {
+
+    public void updateParticipants(List<Participant> participants, String engagementUuid, String authorEmail,
+            String authorName) {
         long projectId = getProjectIdFromUuid(engagementUuid);
         updateParticipantsDB(participants, engagementUuid, projectId, authorEmail, authorName);
-        
+
         String message = String.format("%s,%d,%s,%s", engagementUuid, projectId, authorEmail, authorName);
         bus.sendAndForget(updateEvent, message);
         LOGGER.debug("Updated {} participants for {}", participants.size(), engagementUuid);
     }
 
     @Transactional
-    public void updateParticipantsDB(List<Participant> participants, String engagementUuid, long projectId, String authorEmail, String authorName) {
-        
+    public void updateParticipantsDB(List<Participant> participants, String engagementUuid, long projectId,
+            String authorEmail, String authorName) {
+
         for (Participant participant : participants) {
             participant.setEngagementUuid(engagementUuid);
             participant.setProjectId(projectId);
@@ -159,11 +164,11 @@ public class ParticipantService {
         GitlabProject p = engagementRestClient.getProject(engagementUuid);
         return p.getId();
     }
-    
+
     private long deleteParticipants(String engagementUuid) {
         long deletedRows = participantRepository.delete(ENGAGEMENT_UUID, engagementUuid);
         LOGGER.debug("Deleted {} rows for engagement {}", deletedRows, engagementUuid);
-        
+
         return deletedRows;
     }
 
@@ -177,9 +182,12 @@ public class ParticipantService {
             if (ex.getResponse().getStatus() != 404) {
                 throw ex;
             }
-            LOGGER.error("No participant file found for {} {} {}", projectIdOrPath, ex.getClass(), ex.getMessage());
+            LOGGER.error("No participant file found for {} {}", projectIdOrPath, ex.getMessage());
             return Collections.emptyList();
-        }        
+        } catch (RuntimeException ex) {
+            LOGGER.error("Failure retrieving file {} {}", projectIdOrPath, ex.getMessage(), ex);
+            return Collections.emptyList();
+        }
     }
 
     /**
@@ -190,7 +198,7 @@ public class ParticipantService {
     @Transactional
     public void updateParticipantsInGitlab(String message) {
         LOGGER.debug("Gitlabbing participants - {}", message);
-        
+
         String[] messageFields = message.split(",");
 
         List<Participant> participants = getParticipants(messageFields[0]);

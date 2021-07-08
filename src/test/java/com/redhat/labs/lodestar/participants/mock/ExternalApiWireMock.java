@@ -72,6 +72,12 @@ public class ExternalApiWireMock implements QuarkusTestResourceLifecycleManager 
                 .withBody("{\"msg\": \" 500 Something bad happened\"}")
                 ));
         
+        stubFor(get(urlEqualTo("/api/v4/projects/30/repository/files/users.json?ref=master")).willReturn(aResponse()
+                .withStatus(404)
+                .withHeader("Content-Type",  "application/json")
+                .withBody("{\"msg\": \" 404 No file found \"}")
+                ));
+        
         Map<String, String> config = new HashMap<>();
         config.put("gitlab.api/mp-rest/url", wireMockServer.baseUrl());
         config.put("engagement.api/mp-rest/url", wireMockServer.baseUrl());

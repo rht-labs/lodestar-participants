@@ -41,7 +41,7 @@ public class GitlabFile {
     }
 
     public void decodeFileAttributes() {
-        System.out.println(this);
+
         this.filePath = EncodingUtils.urlDecode(this.filePath);
 
         // decode contents

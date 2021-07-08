@@ -11,8 +11,6 @@ import javax.ws.rs.core.MultivaluedMap;
 
 @ApplicationScoped
 public class GitlabTokenFactory implements ClientHeadersFactory {
-    public static final String GITLAB_PERSONAL_ACCESS_TOKEN = "GITLAB_PERSONAL_ACCESS_TOKEN";
-    public static final Logger LOGGER = LoggerFactory.getLogger(GitlabTokenFactory.class);
     
     @ConfigProperty(name = "gitlab.personal.access.token")
     String gitLabToken;
