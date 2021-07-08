@@ -1,0 +1,10 @@
+name: lodestar-participants
+
+servicePort: 8080
+
+imageName: "quay.io/rht-labs/lodestar-participants"
+imageTag: "latest" # This is intended to be overridden by the parent Helm chart.
+
+db:
+  version: 12
+

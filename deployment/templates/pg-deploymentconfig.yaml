@@ -1,0 +1,83 @@
+apiVersion: apps.openshift.io/v1
+kind: DeploymentConfig
+metadata:
+  labels:
+    app: {{ .Values.name }}
+  name: "{{ .Values.name }}-postgresql"
+spec:
+  replicas: 1
+  selector:
+    name:  "{{ .Values.name }}-postgresql"
+    app: "{{ .Values.name }}-postgresql"
+    deploymentconfig: "{{ .Values.name }}-postgresql"
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        name: "{{ .Values.name }}-postgresql"
+        app: "{{ .Values.name }}-postgresql"
+        deploymentconfig: "{{ .Values.name }}-postgresql"
+    spec:
+      containers:
+      - env:
+        - name: POSTGRESQL_USER
+          valueFrom:
+            secretKeyRef:
+              key: POSTGRESQL_USER
+              name: "{{ .Values.name }}-secret"
+        - name: POSTGRESQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: POSTGRESQL_PASSWORD
+              name: "{{ .Values.name }}-secret"
+        - name: POSTGRESQL_DATABASE
+          valueFrom:
+            secretKeyRef:
+              key: POSTGRESQL_DATABASE
+              name: "{{ .Values.name }}-secret"
+        image: ' '
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          exec:
+            command:
+            - /usr/libexec/check-container
+            - --live
+          initialDelaySeconds: 120
+          timeoutSeconds: 10
+        name: postgresql
+        ports:
+        - containerPort: 5432
+          protocol: TCP
+        readinessProbe:
+          exec:
+            command:
+            - /usr/libexec/check-container
+          initialDelaySeconds: 5
+          timeoutSeconds: 1
+        resources:
+          limits:
+            memory: 512Mi
+        securityContext:
+          capabilities: {}
+          privileged: false
+        terminationMessagePath: /dev/termination-log
+        volumeMounts:
+        - mountPath: /var/lib/pgsql/data
+          name: "{{ .Values.name }}-data"
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      volumes:
+      - emptyDir: {}
+        name: "{{ .Values.name }}-data"
+  triggers:
+  - imageChangeParams:
+      automatic: true
+      containerNames:
+      - postgresql
+      from:
+        kind: ImageStreamTag
+        name: postgresql:{{ .Values.db.version }}
+        namespace: openshift
+    type: ImageChange
+  - type: ConfigChange
