@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,6 +33,14 @@ class ParticipantServiceTest {
     void init() {
         participantService.purge();
         participantService.refresh();
+    }
+    
+    @Test
+    void testRollup() {
+        Map<String, Long> rollup = participantService.getParticipantRollup();
+        assertEquals(4, rollup.get("All"));
+        assertEquals(2, rollup.get("Others"));
+        assertEquals(2, rollup.get("Red Hat"));
     }
     
     @Test

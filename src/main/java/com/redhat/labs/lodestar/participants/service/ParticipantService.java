@@ -2,10 +2,15 @@ package com.redhat.labs.lodestar.participants.service;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.event.Observes;
 import javax.inject.Inject;
+import javax.persistence.Tuple;
 import javax.transaction.Transactional;
 import javax.ws.rs.WebApplicationException;
 
@@ -27,14 +32,13 @@ import io.quarkus.panache.common.Sort;
 import io.quarkus.panache.common.Sort.Direction;
 import io.quarkus.runtime.StartupEvent;
 import io.quarkus.vertx.ConsumeEvent;
-import io.vertx.mutiny.core.eventbus.EventBus;
 
 @ApplicationScoped
 public class ParticipantService {
     private static final Logger LOGGER = LoggerFactory.getLogger(ParticipantService.class);
 
     private static final String ENGAGEMENT_UUID = "engagementUuid";
-    private static final String updateEvent = "updateEvent";
+    public static final String UPDATE_EVENT = "updateEvent";
 
     @Inject
     @RestClient
@@ -49,9 +53,6 @@ public class ParticipantService {
 
     @Inject
     JsonMarshaller json;
-
-    @Inject
-    EventBus bus;
 
     @ConfigProperty(name = "branch")
     String branch;
@@ -93,7 +94,7 @@ public class ParticipantService {
     public void reloadEngagement(Engagement e) {
         LOGGER.debug("Reloading {}", e);
 
-        if(e.getUuid() == null) {
+        if (e.getUuid() == null) {
             LOGGER.error("PROJECT {} DOES NOT HAVE AN ENGAGEMENT UUID ON THE DESCRIPTION", e.getProjectId());
         } else {
 
@@ -101,8 +102,7 @@ public class ParticipantService {
 
             for (Participant participant : participants) {
                 LOGGER.trace("u {}", participant);
-                participant.setProjectId(e.getProjectId());
-                participant.setEngagementUuid(e.getUuid());
+                fillOutParticipant(participant, e.getUuid(), e.getProjectId());
             }
 
             deleteParticipants(e.getUuid());
@@ -137,27 +137,51 @@ public class ParticipantService {
         return participantRepository.count();
     }
 
-    public void updateParticipants(List<Participant> participants, String engagementUuid, String authorEmail,
-            String authorName) {
-        long projectId = getProjectIdFromUuid(engagementUuid);
-        updateParticipantsDB(participants, engagementUuid, projectId, authorEmail, authorName);
+    public Map<String, Long> getParticipantRollup() {
+        return participantRepository.getEntityManager().createQuery(
+                "SELECT organization as organization, count(distinct email) as total FROM Participant GROUP BY ROLLUP(organization)",
+                Tuple.class).getResultStream()
+                .collect(Collectors.toMap(
+                        tuple -> ((String) tuple.get("organization")) == null ? "All"
+                                : ((String) tuple.get("organization")),
+                        tuple -> ((Number) tuple.get("total")).longValue()));
 
-        String message = String.format("%s,%d,%s,%s", engagementUuid, projectId, authorEmail, authorName);
-        bus.sendAndForget(updateEvent, message);
-        LOGGER.debug("Updated {} participants for {}", participants.size(), engagementUuid);
     }
 
     @Transactional
-    public void updateParticipantsDB(List<Participant> participants, String engagementUuid, long projectId,
-            String authorEmail, String authorName) {
+    public long updateParticipants(List<Participant> participants, String engagementUuid, String authorEmail,
+            String authorName) {
+
+        long projectId = getProjectIdFromUuid(engagementUuid);
+
+        List<Participant> existingParticipants = getParticipants(engagementUuid);
 
         for (Participant participant : participants) {
-            participant.setEngagementUuid(engagementUuid);
-            participant.setProjectId(projectId);
+            fillOutParticipant(participant, engagementUuid, projectId);
+
+            Optional<Participant> optionalParticipant = (existingParticipants.isEmpty()) ? Optional.empty()
+                    : existingParticipants.stream().filter(current -> current.getEmail().equals(participant.getEmail()))
+                            .findFirst();
+
+            if (optionalParticipant.isPresent()) {
+                participant.setUuid(optionalParticipant.get().getUuid());
+            } else if (participant.getUuid() == null) {
+                participant.setUuid(UUID.randomUUID().toString());
+            }
         }
 
+        participantRepository.getEntityManager().clear();
         deleteParticipants(engagementUuid);
         participantRepository.persist(participants);
+
+        return projectId;
+    }
+
+    private void fillOutParticipant(Participant participant, String engagementUuid, long projectId) {
+        String org = participant.getEmail().toLowerCase().endsWith("@redhat.com") ? "Red Hat" : "Others";
+        participant.setOrganization(org);
+        participant.setProjectId(projectId);
+        participant.setEngagementUuid(engagementUuid);
     }
 
     private long getProjectIdFromUuid(String engagementUuid) {
@@ -194,7 +218,7 @@ public class ParticipantService {
      * 
      * @param message 3 part method - uuid,authorEmail,authorName
      */
-    @ConsumeEvent(value = updateEvent, blocking = true)
+    @ConsumeEvent(value = UPDATE_EVENT, blocking = true)
     @Transactional
     public void updateParticipantsInGitlab(String message) {
         LOGGER.debug("Gitlabbing participants - {}", message);

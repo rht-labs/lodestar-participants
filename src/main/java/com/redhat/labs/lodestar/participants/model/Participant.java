@@ -41,14 +41,7 @@ public class Participant {
     String email;
     @Column(nullable = false)
     String role;
-    
-    public static class ParticipantBuilder {
-        public ParticipantBuilder engagementUuid(String engagementUuid) {
-            if(engagementUuid != null) {
-                this.engagementUuid = engagementUuid.trim();
-            }
-            return this;
-        }
-    }
+    @Column(nullable = false)
+    String organization;
 
 }
