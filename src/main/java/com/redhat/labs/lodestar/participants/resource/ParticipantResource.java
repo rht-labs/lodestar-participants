@@ -1,6 +1,7 @@
 package com.redhat.labs.lodestar.participants.resource;
 
 import java.util.List;
+import java.util.Map;
 
 import javax.enterprise.context.RequestScoped;
 import javax.inject.Inject;
@@ -22,6 +23,8 @@ import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 import com.redhat.labs.lodestar.participants.model.Participant;
 import com.redhat.labs.lodestar.participants.service.ParticipantService;
 
+import io.vertx.mutiny.core.eventbus.EventBus;
+
 @RequestScoped
 @Path("api/participants")
 @Produces(MediaType.APPLICATION_JSON)
@@ -32,6 +35,9 @@ public class ParticipantResource {
 
     @Inject
     ParticipantService participantService;
+    
+    @Inject
+    EventBus bus;
 
     @GET
     public Response getParticipants(@QueryParam("engagementUuids") List<String> engagementUuids,
@@ -70,6 +76,13 @@ public class ParticipantResource {
         
         return Response.accepted().build();
     }
+    
+    @GET
+    @Path("/enabled")
+    public Response getParticipantsEnabled() {
+        Map<String, Long> rollups = participantService.getParticipantRollup();
+        return Response.ok(rollups).build();
+    }
 
     @GET
     @Path("/engagements/uuid/{engagementUuid}")
@@ -85,8 +98,13 @@ public class ParticipantResource {
             @QueryParam(value = "authorEmail") String authorEmail,
             @QueryParam(value = "authorName") String authorName) {
 
-        participantService.updateParticipants(participants, uuid, authorEmail, authorName);
-
+        String projectIdAndCommitMessage = participantService.updateParticipants(participants, uuid, authorEmail, authorName);
+        
+        if(!ParticipantService.NO_UPDATE.equals(projectIdAndCommitMessage)) {
+            String message = String.format("%s,%s,%s,%s", uuid, projectIdAndCommitMessage, authorEmail, authorName);
+            bus.sendAndForget(ParticipantService.UPDATE_EVENT, message);
+        }
+        
         return Response.ok().build();
     }
 

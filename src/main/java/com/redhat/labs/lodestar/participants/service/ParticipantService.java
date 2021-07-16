@@ -1,11 +1,20 @@
 package com.redhat.labs.lodestar.participants.service;
 
+import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.event.Observes;
 import javax.inject.Inject;
+import javax.persistence.Tuple;
 import javax.transaction.Transactional;
 import javax.ws.rs.WebApplicationException;
 
@@ -27,14 +36,14 @@ import io.quarkus.panache.common.Sort;
 import io.quarkus.panache.common.Sort.Direction;
 import io.quarkus.runtime.StartupEvent;
 import io.quarkus.vertx.ConsumeEvent;
-import io.vertx.mutiny.core.eventbus.EventBus;
 
 @ApplicationScoped
 public class ParticipantService {
     private static final Logger LOGGER = LoggerFactory.getLogger(ParticipantService.class);
 
     private static final String ENGAGEMENT_UUID = "engagementUuid";
-    private static final String updateEvent = "updateEvent";
+    public static final String UPDATE_EVENT = "updateEvent";
+    public static final String NO_UPDATE = "noUpdate";
 
     @Inject
     @RestClient
@@ -50,16 +59,14 @@ public class ParticipantService {
     @Inject
     JsonMarshaller json;
 
-    @Inject
-    EventBus bus;
-
     @ConfigProperty(name = "branch")
     String branch;
 
     @ConfigProperty(name = "participant.file")
     String participantFile;
 
-    String commitMessage = "Participants updated";
+    @ConfigProperty(name = "commit.message.prefix")
+    String commitMessagePrefix;
 
     void onStart(@Observes StartupEvent ev) {
         long count = participantRepository.count();
@@ -93,7 +100,7 @@ public class ParticipantService {
     public void reloadEngagement(Engagement e) {
         LOGGER.debug("Reloading {}", e);
 
-        if(e.getUuid() == null) {
+        if (e.getUuid() == null) {
             LOGGER.error("PROJECT {} DOES NOT HAVE AN ENGAGEMENT UUID ON THE DESCRIPTION", e.getProjectId());
         } else {
 
@@ -101,8 +108,7 @@ public class ParticipantService {
 
             for (Participant participant : participants) {
                 LOGGER.trace("u {}", participant);
-                participant.setProjectId(e.getProjectId());
-                participant.setEngagementUuid(e.getUuid());
+                fillOutParticipant(participant, e.getUuid(), e.getProjectId());
             }
 
             deleteParticipants(e.getUuid());
@@ -115,12 +121,12 @@ public class ParticipantService {
     }
 
     public List<Participant> getParticipants(String engagementUuid) {
-        return participantRepository.list(ENGAGEMENT_UUID, Sort.by("uuid", Direction.Descending), engagementUuid);
+        return participantRepository.list(ENGAGEMENT_UUID, Sort.by("uuid"), engagementUuid);
     }
 
     public List<Participant> getParticipantsAcrossEngagements(int page, int pageSize, List<String> engagementUuids) {
         return participantRepository
-                .find(ENGAGEMENT_UUID + " IN (?1)", Sort.by("uuid", Direction.Descending), engagementUuids)
+                .find(ENGAGEMENT_UUID + " IN (?1)", Sort.by(ENGAGEMENT_UUID).and("uuid"), engagementUuids)
                 .page(Page.of(page, pageSize)).list();
     }
 
@@ -129,7 +135,7 @@ public class ParticipantService {
     }
 
     public List<Participant> getParticipantsPage(int page, int pageSize) {
-        return participantRepository.findAll(Sort.by("uuid", Direction.Descending)).page(Page.of(page, pageSize))
+        return participantRepository.findAll(Sort.by(ENGAGEMENT_UUID).and("uuid")).page(Page.of(page, pageSize))
                 .list();
     }
 
@@ -137,27 +143,99 @@ public class ParticipantService {
         return participantRepository.count();
     }
 
-    public void updateParticipants(List<Participant> participants, String engagementUuid, String authorEmail,
-            String authorName) {
-        long projectId = getProjectIdFromUuid(engagementUuid);
-        updateParticipantsDB(participants, engagementUuid, projectId, authorEmail, authorName);
+    public Map<String, Long> getParticipantRollup() {
+        return participantRepository.getEntityManager().createQuery(
+                "SELECT organization as organization, count(distinct email) as total FROM Participant GROUP BY ROLLUP(organization)",
+                Tuple.class).getResultStream()
+                .collect(Collectors.toMap(
+                        tuple -> ((String) tuple.get("organization")) == null ? "All"
+                                : ((String) tuple.get("organization")),
+                        tuple -> ((Number) tuple.get("total")).longValue()));
 
-        String message = String.format("%s,%d,%s,%s", engagementUuid, projectId, authorEmail, authorName);
-        bus.sendAndForget(updateEvent, message);
-        LOGGER.debug("Updated {} participants for {}", participants.size(), engagementUuid);
     }
 
     @Transactional
-    public void updateParticipantsDB(List<Participant> participants, String engagementUuid, long projectId,
-            String authorEmail, String authorName) {
+    public String updateParticipants(List<Participant> participants, String engagementUuid, String authorEmail,
+            String authorName) {
+
+        long projectId = getProjectIdFromUuid(engagementUuid);
+
+        List<Participant> existingParticipants = getParticipants(engagementUuid);
+        
+        Set<String> added = new HashSet<>();
+        Set<String> updated = new HashSet<>();
+        Set<String> unchanged = new HashSet<>();
+        
+        Set<String> deleted = existingParticipants.stream().map(Participant::getEmail).collect(Collectors.toSet());
 
         for (Participant participant : participants) {
-            participant.setEngagementUuid(engagementUuid);
-            participant.setProjectId(projectId);
+            fillOutParticipant(participant, engagementUuid, projectId);
+
+            Optional<Participant> optionalParticipant = (existingParticipants.isEmpty()) ? Optional.empty()
+                    : existingParticipants.stream().filter(current -> current.getEmail().equals(participant.getEmail()))
+                            .findFirst();
+
+            if (optionalParticipant.isPresent()) { //Found matching email in the db. 
+                participant.setUuid(optionalParticipant.get().getUuid());
+                if(participant.isDifferent(optionalParticipant.get())) {
+                    LOGGER.debug("changed {}", participant.getEmail());
+                    updated.add(participant.getEmail());
+                } else {
+                    LOGGER.debug("unchanged {}", participant.getEmail());
+                    unchanged.add(participant.getEmail());
+                }
+            } else {
+                LOGGER.debug("added {}", participant.getEmail());
+                added.add(participant.getEmail());
+                if (participant.getUuid() == null) {
+                    participant.setUuid(UUID.randomUUID().toString());
+                }
+            }
+        }
+        
+        deleted.removeAll(updated);
+        deleted.removeAll(unchanged);
+        
+        if(added.size() == 0 && updated.size() == 0 && deleted.size() == 0) {
+            return NO_UPDATE;
         }
 
+        participantRepository.getEntityManager().clear();
         deleteParticipants(engagementUuid);
         participantRepository.persist(participants);
+        
+        StringBuilder commitMessage = new StringBuilder();
+        commitMessage.append(projectId);
+        commitMessage.append(",");
+        commitMessage.append(commitMessagePrefix);
+        commitMessage.append(" ");
+        updateCommitMessage(commitMessage, "added", added);
+        updateCommitMessage(commitMessage, "updated", updated);
+        updateCommitMessage(commitMessage, "deleted", deleted);
+
+        return commitMessage.toString().trim();
+    }
+    
+    private void updateCommitMessage(StringBuilder commitMessage, String type, Collection<String> changes) {
+        
+        if(changes.size() > 2) {
+            commitMessage.append(changes.size());
+            commitMessage.append(" ");
+            commitMessage.append(type);
+            commitMessage.append(". ");
+        } else if(changes.size() > 0) {
+            changes.stream().forEach(ch -> commitMessage.append(ch + " ")); 
+            commitMessage.append(type);
+            commitMessage.append(". ");
+        }
+        
+    }
+
+    private void fillOutParticipant(Participant participant, String engagementUuid, long projectId) {
+        String org = participant.getEmail().toLowerCase().endsWith("@redhat.com") ? "Red Hat" : "Others";
+        participant.setOrganization(org);
+        participant.setProjectId(projectId);
+        participant.setEngagementUuid(engagementUuid);
     }
 
     private long getProjectIdFromUuid(String engagementUuid) {
@@ -194,21 +272,21 @@ public class ParticipantService {
      * 
      * @param message 3 part method - uuid,authorEmail,authorName
      */
-    @ConsumeEvent(value = updateEvent, blocking = true)
+    @ConsumeEvent(value = UPDATE_EVENT, blocking = true)
     @Transactional
     public void updateParticipantsInGitlab(String message) {
         LOGGER.debug("Gitlabbing participants - {}", message);
 
-        String[] messageFields = message.split(",");
+        String[] uuidProjectMessageEmailName = message.split(",");
 
-        List<Participant> participants = getParticipants(messageFields[0]);
+        List<Participant> participants = getParticipants(uuidProjectMessageEmailName[0]);
 
         String content = json.toJson(participants);
-        GitlabFile file = GitlabFile.builder().filePath(participantFile).content(content).commitMessage(commitMessage)
-                .branch(branch).authorEmail(messageFields[2]).authorName(messageFields[3]).build();
+        GitlabFile file = GitlabFile.builder().filePath(participantFile).content(content).commitMessage(uuidProjectMessageEmailName[2])
+                .branch(branch).authorEmail(uuidProjectMessageEmailName[3]).authorName(uuidProjectMessageEmailName[4]).build();
         file.encodeFileAttributes();
 
-        gitlabRestClient.updateFile(messageFields[1], participantFile, file);
+        gitlabRestClient.updateFile(uuidProjectMessageEmailName[1], participantFile, file);
 
     }
 
