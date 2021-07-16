@@ -98,10 +98,13 @@ public class ParticipantResource {
             @QueryParam(value = "authorEmail") String authorEmail,
             @QueryParam(value = "authorName") String authorName) {
 
-        long projectId = participantService.updateParticipants(participants, uuid, authorEmail, authorName);
-        String message = String.format("%s,%d,%s,%s", uuid, projectId, authorEmail, authorName);
-        bus.sendAndForget(ParticipantService.UPDATE_EVENT, message);
-
+        String projectIdAndCommitMessage = participantService.updateParticipants(participants, uuid, authorEmail, authorName);
+        
+        if(!ParticipantService.NO_UPDATE.equals(projectIdAndCommitMessage)) {
+            String message = String.format("%s,%s,%s,%s", uuid, projectIdAndCommitMessage, authorEmail, authorName);
+            bus.sendAndForget(ParticipantService.UPDATE_EVENT, message);
+        }
+        
         return Response.ok().build();
     }
 
