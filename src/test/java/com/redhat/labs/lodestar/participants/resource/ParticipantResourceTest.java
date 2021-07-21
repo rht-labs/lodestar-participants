@@ -35,7 +35,7 @@ class ParticipantResourceTest {
 
     @Test
     void testRefresh() {
-        when().put("refresh").then().statusCode(202);
+        when().put("refresh").then().statusCode(200);
         assertEquals(6, participantService.getParticipantCount());
     }
 
