@@ -2,7 +2,6 @@ package com.redhat.labs.lodestar.participants.service;
 
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -33,7 +32,6 @@ import com.redhat.labs.lodestar.participants.utils.JsonMarshaller;
 
 import io.quarkus.panache.common.Page;
 import io.quarkus.panache.common.Sort;
-import io.quarkus.panache.common.Sort.Direction;
 import io.quarkus.runtime.StartupEvent;
 import io.quarkus.vertx.ConsumeEvent;
 
