@@ -71,10 +71,13 @@ public class ParticipantResource {
     @APIResponses(value = { @APIResponse(responseCode = "202", description = "The request was accepted and will be processed.") })
     @Operation(summary = "Refreshes database with data in git, purging first")
     public Response refreshData() {
+
         participantService.purge();
         participantService.refresh();
         
-        return Response.accepted().build();
+        long participantCount = participantService.getParticipantCount();
+        
+        return Response.ok().header("x-total-participants", participantCount).build();
     }
     
     @GET
