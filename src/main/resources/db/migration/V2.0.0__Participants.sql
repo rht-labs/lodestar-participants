@@ -1,3 +1,5 @@
+drop table Participant;
+
 create table Participant (
     uuid varchar(255) not null,
     email varchar(255) not null,
@@ -10,5 +12,5 @@ create table Participant (
     primary key (uuid)
 );
 
-create index IDXfq09vs7pigm2h4yhq9swh6dnr on Participant (projectId);
-create index IDX2hjvqmn8r102s4sembwkfsi1a on Participant (engagementUuid);
+create index project_id_index on Participant (projectId);
+create index engagement_uuid_index on Participant (engagementUuid);
