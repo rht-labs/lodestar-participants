@@ -1,4 +1,4 @@
-drop table Participant;
+DROP TABLE IF EXISTS Participant;
 
 create table Participant (
     uuid varchar(255) not null,
