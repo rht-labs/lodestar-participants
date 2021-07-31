@@ -13,7 +13,6 @@ import java.util.stream.Collectors;
 import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.event.Observes;
 import javax.inject.Inject;
-import javax.persistence.Tuple;
 import javax.transaction.Transactional;
 import javax.ws.rs.WebApplicationException;
 
@@ -83,7 +82,7 @@ public class ParticipantService {
         List<Engagement> engagements = engagementRestClient.getAllEngagementProjects();
 
         LOGGER.debug("Engagement count {}", engagements.size());
-        engagements.parallelStream().forEach(this::reloadEngagement);
+        engagements.stream().forEach(this::reloadEngagement);
 
         LOGGER.debug("refresh complete");
     }
@@ -119,12 +118,12 @@ public class ParticipantService {
     }
 
     public List<Participant> getParticipants(String engagementUuid) {
-        return participantRepository.list(ENGAGEMENT_UUID, Sort.by("uuid"), engagementUuid);
+        return participantRepository.list(ENGAGEMENT_UUID, Sort.by("email").and("uuid"), engagementUuid);
     }
 
     public List<Participant> getParticipantsAcrossEngagements(int page, int pageSize, List<String> engagementUuids) {
         return participantRepository
-                .find(ENGAGEMENT_UUID + " IN (?1)", Sort.by(ENGAGEMENT_UUID).and("uuid"), engagementUuids)
+                .find(ENGAGEMENT_UUID + " IN (?1)", Sort.by(ENGAGEMENT_UUID).and("email").and("uuid"), engagementUuids)
                 .page(Page.of(page, pageSize)).list();
     }
 
@@ -133,23 +132,33 @@ public class ParticipantService {
     }
 
     public List<Participant> getParticipantsPage(int page, int pageSize) {
-        return participantRepository.findAll(Sort.by(ENGAGEMENT_UUID).and("uuid")).page(Page.of(page, pageSize))
+        return participantRepository.findAll(Sort.by(ENGAGEMENT_UUID).and("email").and("uuid")).page(Page.of(page, pageSize))
                 .list();
+    }
+    
+    public List<Participant> getParticipantsByRegion(List<String> region, int page, int pageSize) {
+        return participantRepository.getParticipantsByRegion(region, Page.of(page, pageSize));
+    }
+    
+    public long countParticipantsByRegion(List<String> region) {
+        return participantRepository.countParticipantsByRegion(region);
     }
 
     public long getParticipantCount() {
         return participantRepository.count();
     }
 
-    public Map<String, Long> getParticipantRollup() {
-        return participantRepository.getEntityManager().createQuery(
-                "SELECT organization as organization, count(distinct email) as total FROM Participant GROUP BY ROLLUP(organization)",
-                Tuple.class).getResultStream()
-                .collect(Collectors.toMap(
-                        tuple -> ((String) tuple.get("organization")) == null ? "All"
-                                : ((String) tuple.get("organization")),
-                        tuple -> ((Number) tuple.get("total")).longValue()));
-
+    public Map<String, Long> getParticipantRollup(List<String> region) {
+        if(region.isEmpty()) {
+            return participantRepository.getParticipantRollup();
+        }
+            
+        return participantRepository.getParticipantRollup(region);
+    }
+    
+    public Map<String, Map<String, Long>> getParticipantRollupAllRegions() {
+        Map<String, Map<String, Long>> rollup = participantRepository.getParticipantRollupAllRegions();
+        return rollup;
     }
 
     @Transactional
@@ -194,7 +203,7 @@ public class ParticipantService {
         deleted.removeAll(updated);
         deleted.removeAll(unchanged);
         
-        if(added.size() == 0 && updated.size() == 0 && deleted.size() == 0) {
+        if(added.isEmpty() && updated.isEmpty() && deleted.isEmpty()) {
             return NO_UPDATE;
         }
 
@@ -221,7 +230,7 @@ public class ParticipantService {
             commitMessage.append(" ");
             commitMessage.append(type);
             commitMessage.append(". ");
-        } else if(changes.size() > 0) {
+        } else if(!changes.isEmpty()) {
             changes.stream().forEach(ch -> commitMessage.append(ch + " ")); 
             commitMessage.append(type);
             commitMessage.append(". ");
@@ -256,6 +265,7 @@ public class ParticipantService {
             return json.fromJson(file.getContent());
         } catch (WebApplicationException ex) {
             if (ex.getResponse().getStatus() != 404) {
+                LOGGER.error("Error ({}) fetching participant file for project {}", ex.getResponse().getStatus(), projectIdOrPath);
                 throw ex;
             }
             LOGGER.error("No participant file found for {} {}", projectIdOrPath, ex.getMessage());

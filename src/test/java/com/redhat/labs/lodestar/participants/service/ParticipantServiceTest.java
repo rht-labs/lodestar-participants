@@ -1,16 +1,18 @@
 package com.redhat.labs.lodestar.participants.service;
 
 
-import javax.inject.Inject;
-import javax.ws.rs.WebApplicationException;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+
+import javax.inject.Inject;
+import javax.ws.rs.WebApplicationException;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -18,7 +20,6 @@ import org.junit.jupiter.api.Test;
 import com.redhat.labs.lodestar.participants.mock.ExternalApiWireMock;
 import com.redhat.labs.lodestar.participants.model.Engagement;
 import com.redhat.labs.lodestar.participants.model.Participant;
-import com.redhat.labs.lodestar.participants.service.ParticipantService;
 
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
@@ -38,10 +39,56 @@ class ParticipantServiceTest {
     
     @Test
     void testRollup() {
-        Map<String, Long> rollup = participantService.getParticipantRollup();
+        Map<String, Long> rollup = participantService.getParticipantRollup(Collections.emptyList());
         assertEquals(6, rollup.get("All"));
         assertEquals(5, rollup.get("Others"));
         assertEquals(1, rollup.get("Red Hat"));
+    }
+    @Test
+    void testRegionRollup() {
+        Map<String, Long> rollup = participantService.getParticipantRollup(Collections.singletonList("latam"));
+        assertEquals(3, rollup.get("All"));
+        assertEquals(2, rollup.get("Others"));
+        assertEquals(1, rollup.get("Red Hat"));
+    }
+    
+    @Test
+    void testAllRegionRollup() {
+        Map<String, Map<String, Long>> rollup = participantService.getParticipantRollupAllRegions();
+        
+        assertEquals(3, rollup.size());
+        
+        assertTrue(rollup.containsKey("All"));
+        assertTrue(rollup.containsKey("na"));
+        assertTrue(rollup.containsKey("latam"));
+        
+        Map<String, Long> all = rollup.get("All");
+        Map<String, Long> na = rollup.get("na");
+        Map<String, Long> latam = rollup.get("latam");
+        
+        assertEquals(6, all.get("All"));
+        assertEquals(5, all.get("Others"));
+        assertEquals(1, all.get("Red Hat"));
+        
+        assertEquals(3, na.get("All"));
+        assertEquals(3, na.get("Others"));
+        assertNull(na.get("Red Hat"));
+        
+        assertEquals(3, latam.get("All"));
+        assertEquals(2, latam.get("Others"));
+        assertEquals(1, latam.get("Red Hat"));
+    }
+    
+    @Test
+    void testRegion() {
+        List<String> region = Collections.singletonList("latam");
+        
+        long regionCount = participantService.countParticipantsByRegion(region);
+        assertEquals(3, regionCount);
+        
+        List<Participant> participants = participantService.getParticipantsByRegion(region, 0, 6);
+        
+        assertEquals(3, participants.size());
     }
     
     @Test

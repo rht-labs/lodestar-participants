@@ -40,6 +40,11 @@ class ParticipantResourceTest {
     }
 
     @Test
+    void testGetEnabledBreakdown() {
+        when().get("/enabled/breakdown").then().statusCode(200).body("size()", is(3));
+    }
+    
+    @Test
     void testGetEnabled() {
         when().get("/enabled").then().statusCode(200).body("size()", is(3)).body("All", equalTo(6))
                 .body("'Red Hat'", equalTo(1)).body("Others", equalTo(5));
@@ -48,6 +53,18 @@ class ParticipantResourceTest {
     @Test
     void testGetParticipant() {
         when().get().then().statusCode(200).body("size()", is(6)).header("x-total-participants", equalTo("6"));
+    }
+    
+    @Test
+    void testGetParticipantBadRequest() {
+        given().queryParam("engagementUuids", "1").queryParam("region", "a").when().get().then().statusCode(400);
+    }
+    
+    @Test
+    void testGetParticipantForRegion() {
+        given().queryParam("page", "0").queryParam("pageSize", "2").queryParam("region", "na")
+                .queryParam("region", "apac").get().then().statusCode(200)
+                .body("size()", is(2)).header("x-total-participants", equalTo("3"));
     }
 
     @Test
@@ -84,6 +101,17 @@ class ParticipantResourceTest {
                 .get("engagements/uuid/{engagementUuid}").then().statusCode(200)
                 .header("x-total-participants", equalTo("3")).body("size()", is(3))
                 .body("email", hasItems("mac4@riot.com")).body("first_name", hasItems("Update"));
+    }
+    
+    @Test
+    void testNoUpdateParticipants() {
+
+        String engagementUuid = "cb570945-a209-40ba-9e42-63a7993baf4d";
+        List<Participant> participants = participantService.getParticipants(engagementUuid);
+
+        given().header("Content-Type", "application/json").pathParam("engagementUuid", engagementUuid)
+                .body(participants).put("engagements/uuid/{engagementUuid}").then().statusCode(200);
+
     }
 
 }

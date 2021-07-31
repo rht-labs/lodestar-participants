@@ -41,6 +41,7 @@ public class Participant {
     String role;
     @Column(nullable = false)
     String organization;
+    String region;
 
     /**
      * Inverse of isSame

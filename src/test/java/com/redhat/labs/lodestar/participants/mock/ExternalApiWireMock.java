@@ -44,35 +44,35 @@ public class ExternalApiWireMock implements QuarkusTestResourceLifecycleManager 
         
         body = ResourceLoader.load("gitlab-file-users-13065.json");
         
-        stubFor(get(urlEqualTo("/api/v4/projects/13065/repository/files/participants.json?ref=master")).willReturn(aResponse()
+        stubFor(get(urlEqualTo("/api/v4/projects/13065/repository/files/engagement%2Fparticipants.json?ref=master")).willReturn(aResponse()
                 .withHeader("Content-Type",  "application/json")
                 .withBody(body)
                 ));
 
-        stubFor(put(urlEqualTo("/api/v4/projects/13065/repository/files/participants.json")).willReturn(aResponse()
+        stubFor(put(urlEqualTo("/api/v4/projects/13065/repository/files/engagement%2Fparticipants.json")).willReturn(aResponse()
                 .withHeader("Content-Type",  "application/json")
                 .withBody(body)
                 ));
         
         body = ResourceLoader.load("gitlab-file-users-20962.json");
         
-        stubFor(get(urlEqualTo("/api/v4/projects/20962/repository/files/participants.json?ref=master")).willReturn(aResponse()
+        stubFor(get(urlEqualTo("/api/v4/projects/20962/repository/files/engagement%2Fparticipants.json?ref=master")).willReturn(aResponse()
                 .withHeader("Content-Type",  "application/json")
                 .withBody(body)
                 ));
 
-        stubFor(put(urlEqualTo("/api/v4/projects/20962/repository/files/participants.json")).willReturn(aResponse()
+        stubFor(put(urlEqualTo("/api/v4/projects/20962/repository/files/engagement%2Fparticipants.json")).willReturn(aResponse()
                 .withHeader("Content-Type",  "application/json")
                 .withBody(body)
                 ));
         
-        stubFor(get(urlEqualTo("/api/v4/projects/99/repository/files/participants.json?ref=master")).willReturn(aResponse()
+        stubFor(get(urlEqualTo("/api/v4/projects/99/repository/files/engagement%2Fparticipants.json?ref=master")).willReturn(aResponse()
                 .withStatus(500)
                 .withHeader("Content-Type",  "application/json")
                 .withBody("{\"msg\": \" 500 Something bad happened\"}")
                 ));
         
-        stubFor(get(urlEqualTo("/api/v4/projects/30/repository/files/participants.json?ref=master")).willReturn(aResponse()
+        stubFor(get(urlEqualTo("/api/v4/projects/30/repository/files/engagement%2Fparticipants.json?ref=master")).willReturn(aResponse()
                 .withStatus(404)
                 .withHeader("Content-Type",  "application/json")
                 .withBody("{\"msg\": \" 404 No file found \"}")
