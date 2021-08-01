@@ -112,19 +112,19 @@ public class ParticipantResource {
     }
 
     @PUT
-    @Path("/engagements/uuid/{engagementUuid}")
-    public Response updateParticipants(@PathParam(value = "engagementUuid") String uuid, List<Participant> participants,
+    @Path("/engagements/uuid/{engagementUuid}/{region}")
+    public Response updateParticipants(@PathParam(value = "engagementUuid") String uuid, @PathParam(value = "region") String region, List<Participant> participants,
             @QueryParam(value = "authorEmail") String authorEmail,
             @QueryParam(value = "authorName") String authorName) {
 
-        String projectIdAndCommitMessage = participantService.updateParticipants(participants, uuid, authorEmail, authorName);
+        String projectIdAndCommitMessage = participantService.updateParticipants(participants, uuid, region, authorEmail, authorName);
         
         if(!ParticipantService.NO_UPDATE.equals(projectIdAndCommitMessage)) {
             String message = String.format("%s,%s,%s,%s", uuid, projectIdAndCommitMessage, authorEmail, authorName);
             bus.publish(ParticipantService.UPDATE_EVENT, message);
         }
         
-        return Response.ok().build();
+        return getParticipantsByEngagementUuid(uuid);
     }
 
 }

@@ -149,7 +149,7 @@ class ParticipantServiceTest {
     void testUpdateParticipants() {
        List<Participant> participants = new ArrayList<>();
        participants.add(Participant.builder().uuid("uuid").email("joe@schmo.com").firstName("Joe").lastName("Schmo").role("schmo").build());
-       String update = participantService.updateParticipants(participants, "cb570945-a209-40ba-9e42-63a7993baf4d", "bo@bo.com", "Bo Bichette"); 
+       String update = participantService.updateParticipants(participants, "cb570945-a209-40ba-9e42-63a7993baf4d", "na", "bo@bo.com", "Bo Bichette"); 
        
        assertEquals("13065,Participants: joe@schmo.com added. 3 deleted.", update);
        
@@ -163,7 +163,7 @@ class ParticipantServiceTest {
     void testUpdateParticipantsNoUpdate() {
        List<Participant> participants = participantService.getParticipants("cb570945-a209-40ba-9e42-63a7993baf4d");
        
-       String update = participantService.updateParticipants(participants, "cb570945-a209-40ba-9e42-63a7993baf4d", "bo@bo.com", "Bo Bichette");
+       String update = participantService.updateParticipants(participants, "cb570945-a209-40ba-9e42-63a7993baf4d","na", "bo@bo.com", "Bo Bichette");
        
        assertEquals(ParticipantService.NO_UPDATE, update);
        

@@ -162,7 +162,7 @@ public class ParticipantService {
     }
 
     @Transactional
-    public String updateParticipants(List<Participant> participants, String engagementUuid, String authorEmail,
+    public String updateParticipants(List<Participant> participants, String engagementUuid, String region, String authorEmail,
             String authorName) {
 
         long projectId = getProjectIdFromUuid(engagementUuid);
@@ -176,7 +176,7 @@ public class ParticipantService {
         Set<String> deleted = existingParticipants.stream().map(Participant::getEmail).collect(Collectors.toSet());
 
         for (Participant participant : participants) {
-            fillOutParticipant(participant, engagementUuid, projectId);
+            fillOutParticipant(participant, engagementUuid, region, projectId);
 
             Optional<Participant> optionalParticipant = (existingParticipants.isEmpty()) ? Optional.empty()
                     : existingParticipants.stream().filter(current -> current.getEmail().equals(participant.getEmail()))
@@ -199,7 +199,7 @@ public class ParticipantService {
                 }
             }
         }
-        
+    
         deleted.removeAll(updated);
         deleted.removeAll(unchanged);
         
@@ -207,7 +207,6 @@ public class ParticipantService {
             return NO_UPDATE;
         }
 
-        participantRepository.getEntityManager().clear();
         deleteParticipants(engagementUuid);
         participantRepository.persist(participants);
         
@@ -237,12 +236,31 @@ public class ParticipantService {
         }
         
     }
-
+    
+    /**
+     * No need to set region here since it's data from gitlab and should already have it
+     * @param participant
+     * @param engagementUuid
+     * @param projectId
+     */
     private void fillOutParticipant(Participant participant, String engagementUuid, long projectId) {
+        fillOutParticipant(participant, engagementUuid, participant.getRegion(), projectId);
+    }
+
+    /**
+     * Region should be sent into the api payload and added to the participant. Region is the same
+     * per engagement id.
+     * @param participant
+     * @param engagementUuid
+     * @param region
+     * @param projectId
+     */
+    private void fillOutParticipant(Participant participant, String engagementUuid, String region, long projectId) {
         String org = participant.getEmail().toLowerCase().endsWith("@redhat.com") ? "Red Hat" : "Others";
         participant.setOrganization(org);
         participant.setProjectId(projectId);
         participant.setEngagementUuid(engagementUuid);
+        participant.setRegion(region);
     }
 
     private long getProjectIdFromUuid(String engagementUuid) {
