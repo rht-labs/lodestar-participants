@@ -13,7 +13,6 @@ import java.util.stream.Collectors;
 import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.event.Observes;
 import javax.inject.Inject;
-import javax.persistence.Tuple;
 import javax.transaction.Transactional;
 import javax.ws.rs.WebApplicationException;
 
@@ -83,7 +82,7 @@ public class ParticipantService {
         List<Engagement> engagements = engagementRestClient.getAllEngagementProjects();
 
         LOGGER.debug("Engagement count {}", engagements.size());
-        engagements.parallelStream().forEach(this::reloadEngagement);
+        engagements.stream().forEach(this::reloadEngagement);
 
         LOGGER.debug("refresh complete");
     }
@@ -119,12 +118,12 @@ public class ParticipantService {
     }
 
     public List<Participant> getParticipants(String engagementUuid) {
-        return participantRepository.list(ENGAGEMENT_UUID, Sort.by("uuid"), engagementUuid);
+        return participantRepository.list(ENGAGEMENT_UUID, Sort.by("email").and("uuid"), engagementUuid);
     }
 
     public List<Participant> getParticipantsAcrossEngagements(int page, int pageSize, List<String> engagementUuids) {
         return participantRepository
-                .find(ENGAGEMENT_UUID + " IN (?1)", Sort.by(ENGAGEMENT_UUID).and("uuid"), engagementUuids)
+                .find(ENGAGEMENT_UUID + " IN (?1)", Sort.by(ENGAGEMENT_UUID).and("email").and("uuid"), engagementUuids)
                 .page(Page.of(page, pageSize)).list();
     }
 
@@ -133,27 +132,37 @@ public class ParticipantService {
     }
 
     public List<Participant> getParticipantsPage(int page, int pageSize) {
-        return participantRepository.findAll(Sort.by(ENGAGEMENT_UUID).and("uuid")).page(Page.of(page, pageSize))
+        return participantRepository.findAll(Sort.by(ENGAGEMENT_UUID).and("email").and("uuid")).page(Page.of(page, pageSize))
                 .list();
+    }
+    
+    public List<Participant> getParticipantsByRegion(List<String> region, int page, int pageSize) {
+        return participantRepository.getParticipantsByRegion(region, Page.of(page, pageSize));
+    }
+    
+    public long countParticipantsByRegion(List<String> region) {
+        return participantRepository.countParticipantsByRegion(region);
     }
 
     public long getParticipantCount() {
         return participantRepository.count();
     }
 
-    public Map<String, Long> getParticipantRollup() {
-        return participantRepository.getEntityManager().createQuery(
-                "SELECT organization as organization, count(distinct email) as total FROM Participant GROUP BY ROLLUP(organization)",
-                Tuple.class).getResultStream()
-                .collect(Collectors.toMap(
-                        tuple -> ((String) tuple.get("organization")) == null ? "All"
-                                : ((String) tuple.get("organization")),
-                        tuple -> ((Number) tuple.get("total")).longValue()));
-
+    public Map<String, Long> getParticipantRollup(List<String> region) {
+        if(region.isEmpty()) {
+            return participantRepository.getParticipantRollup();
+        }
+            
+        return participantRepository.getParticipantRollup(region);
+    }
+    
+    public Map<String, Map<String, Long>> getParticipantRollupAllRegions() {
+        Map<String, Map<String, Long>> rollup = participantRepository.getParticipantRollupAllRegions();
+        return rollup;
     }
 
     @Transactional
-    public String updateParticipants(List<Participant> participants, String engagementUuid, String authorEmail,
+    public String updateParticipants(List<Participant> participants, String engagementUuid, String region, String authorEmail,
             String authorName) {
 
         long projectId = getProjectIdFromUuid(engagementUuid);
@@ -167,7 +176,7 @@ public class ParticipantService {
         Set<String> deleted = existingParticipants.stream().map(Participant::getEmail).collect(Collectors.toSet());
 
         for (Participant participant : participants) {
-            fillOutParticipant(participant, engagementUuid, projectId);
+            fillOutParticipant(participant, engagementUuid, region, projectId);
 
             Optional<Participant> optionalParticipant = (existingParticipants.isEmpty()) ? Optional.empty()
                     : existingParticipants.stream().filter(current -> current.getEmail().equals(participant.getEmail()))
@@ -190,15 +199,14 @@ public class ParticipantService {
                 }
             }
         }
-        
+    
         deleted.removeAll(updated);
         deleted.removeAll(unchanged);
         
-        if(added.size() == 0 && updated.size() == 0 && deleted.size() == 0) {
+        if(added.isEmpty() && updated.isEmpty() && deleted.isEmpty()) {
             return NO_UPDATE;
         }
 
-        participantRepository.getEntityManager().clear();
         deleteParticipants(engagementUuid);
         participantRepository.persist(participants);
         
@@ -221,19 +229,38 @@ public class ParticipantService {
             commitMessage.append(" ");
             commitMessage.append(type);
             commitMessage.append(". ");
-        } else if(changes.size() > 0) {
+        } else if(!changes.isEmpty()) {
             changes.stream().forEach(ch -> commitMessage.append(ch + " ")); 
             commitMessage.append(type);
             commitMessage.append(". ");
         }
         
     }
-
+    
+    /**
+     * No need to set region here since it's data from gitlab and should already have it
+     * @param participant
+     * @param engagementUuid
+     * @param projectId
+     */
     private void fillOutParticipant(Participant participant, String engagementUuid, long projectId) {
+        fillOutParticipant(participant, engagementUuid, participant.getRegion(), projectId);
+    }
+
+    /**
+     * Region should be sent into the api payload and added to the participant. Region is the same
+     * per engagement id.
+     * @param participant
+     * @param engagementUuid
+     * @param region
+     * @param projectId
+     */
+    private void fillOutParticipant(Participant participant, String engagementUuid, String region, long projectId) {
         String org = participant.getEmail().toLowerCase().endsWith("@redhat.com") ? "Red Hat" : "Others";
         participant.setOrganization(org);
         participant.setProjectId(projectId);
         participant.setEngagementUuid(engagementUuid);
+        participant.setRegion(region);
     }
 
     private long getProjectIdFromUuid(String engagementUuid) {
@@ -256,6 +283,7 @@ public class ParticipantService {
             return json.fromJson(file.getContent());
         } catch (WebApplicationException ex) {
             if (ex.getResponse().getStatus() != 404) {
+                LOGGER.error("Error ({}) fetching participant file for project {}", ex.getResponse().getStatus(), projectIdOrPath);
                 throw ex;
             }
             LOGGER.error("No participant file found for {} {}", projectIdOrPath, ex.getMessage());

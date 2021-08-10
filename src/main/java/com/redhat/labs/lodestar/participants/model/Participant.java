@@ -2,10 +2,12 @@ package com.redhat.labs.lodestar.participants.model;
 
 import javax.persistence.Column;
 import javax.persistence.Entity;
+import javax.persistence.GeneratedValue;
 import javax.persistence.Id;
 import javax.persistence.Index;
 import javax.persistence.Table;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
@@ -19,11 +21,15 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
-@Table(indexes = { @Index(columnList = "projectId"), @Index(columnList = "engagementUuid") })
+@Table(indexes = { @Index(columnList = "projectId"), @Index(columnList = "engagementUuid"), @Index(columnList = "region") })
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class Participant {
 
-    @Id
+    @Id @GeneratedValue
+    @JsonIgnore
+    private Long id;
+    
+    @Column(nullable = false, unique = true)
     String uuid;
     @Column(nullable = false)
     Long projectId;
@@ -41,6 +47,7 @@ public class Participant {
     String role;
     @Column(nullable = false)
     String organization;
+    String region;
 
     /**
      * Inverse of isSame
@@ -74,8 +81,8 @@ public class Participant {
             return true;
         }
 
-        // if thiz null -> that must be not null otherwise compare
-        return thiz == null || that.contentEquals(thiz);
+        // if thiz is not null, check equality with that (null or otherwise) 
+        return thiz != null && thiz.equals(that);
 
     }
 
