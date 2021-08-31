@@ -1,11 +1,6 @@
 package com.redhat.labs.lodestar.participants.model;
 
-import javax.persistence.Column;
-import javax.persistence.Entity;
-import javax.persistence.GeneratedValue;
-import javax.persistence.Id;
-import javax.persistence.Index;
-import javax.persistence.Table;
+import javax.persistence.*;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
@@ -48,6 +43,12 @@ public class Participant {
     @Column(nullable = false)
     String organization;
     String region;
+    @Transient
+    Boolean reset;
+
+    public boolean needsReset() {
+        return reset != null && reset;
+    }
 
     /**
      * Inverse of isSame

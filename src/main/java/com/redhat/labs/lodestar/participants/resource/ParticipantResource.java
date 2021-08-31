@@ -15,6 +15,7 @@ import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
+import com.redhat.labs.lodestar.participants.model.GitLabCommit;
 import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.eclipse.microprofile.openapi.annotations.responses.APIResponse;
 import org.eclipse.microprofile.openapi.annotations.responses.APIResponses;
@@ -117,11 +118,12 @@ public class ParticipantResource {
             @QueryParam(value = "authorEmail") String authorEmail,
             @QueryParam(value = "authorName") String authorName) {
 
-        String projectIdAndCommitMessage = participantService.updateParticipants(participants, uuid, region, authorEmail, authorName);
+        GitLabCommit commit = participantService.updateParticipants(participants, uuid, region, authorEmail, authorName);
         
-        if(!ParticipantService.NO_UPDATE.equals(projectIdAndCommitMessage)) {
-            String message = String.format("%s,%s,%s,%s", uuid, projectIdAndCommitMessage, authorEmail, authorName);
-            bus.publish(ParticipantService.UPDATE_EVENT, message);
+        if(commit.isUpdateRequired()) {
+            bus.publish(ParticipantService.UPDATE_EVENT, commit);
+        } else if(!commit.getResetParticipants().isEmpty()) {
+            bus.publish(ParticipantService.RESET_EVENT, commit);
         }
         
         return getParticipantsByEngagementUuid(uuid);

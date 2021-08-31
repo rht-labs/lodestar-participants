@@ -39,16 +39,26 @@ public class JsonMarshaller {
         om.setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
     }
 
-    public List<Participant> fromJson(String json) {
-        try {
-            return om.readValue(json, new TypeReference<List<Participant>>() {
+    public Participant fromJson(String json) {
+        return fromJson(json, new TypeReference<Participant>() {
             });
+
+    }
+
+    public List<Participant> fromJsonList(String json) {
+        return fromJson(json, new TypeReference<List<Participant>>() {
+            });
+    }
+
+    private <T> T fromJson(String json, TypeReference<T> type) {
+        try {
+            return om.readValue(json, type);
         } catch (JsonProcessingException e) {
             throw new ParticipantExcpetion("Error translating participant json data", e);
         }
     }
 
-    public String toJson(List<Participant> participants) {
+    public String toJson(Object participants) {
         try {
             return om.writeValueAsString(participants);
         } catch (JsonProcessingException e) {

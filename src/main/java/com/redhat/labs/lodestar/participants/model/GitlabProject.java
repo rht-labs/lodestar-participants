@@ -11,6 +11,6 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class GitlabProject {
 
-    private long id;
+    private int id;
     private String description;
 }
