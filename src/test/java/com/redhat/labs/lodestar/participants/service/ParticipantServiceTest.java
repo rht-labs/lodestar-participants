@@ -8,7 +8,7 @@ import java.util.Map;
 
 import javax.inject.Inject;
 
-import com.redhat.labs.lodestar.participants.exception.ParticipantExcpetion;
+import com.redhat.labs.lodestar.participants.exception.ParticipantException;
 import com.redhat.labs.lodestar.participants.model.GitLabCommit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -100,7 +100,7 @@ class ParticipantServiceTest {
     @Test
     void testReloadEngagementFailure() {
         Engagement engagement = Engagement.builder().projectId(99).uuid("99uuid99").build();
-        ParticipantExcpetion ex = assertThrows(ParticipantExcpetion.class, () -> participantService.reloadEngagement(engagement));
+        ParticipantException ex = assertThrows(ParticipantException.class, () -> participantService.reloadEngagement(engagement));
         
         assertEquals("Participant file not retrieved for project 99. Status 500, Reason Server Error", ex.getMessage());
     }

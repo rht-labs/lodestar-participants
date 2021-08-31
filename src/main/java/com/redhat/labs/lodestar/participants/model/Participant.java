@@ -52,8 +52,8 @@ public class Participant {
 
     /**
      * Inverse of isSame
-     * @param other
-     * @return
+     * @param other compare to
+     * @return true if different
      */
     public boolean isDifferent(Participant other) {
         return !isSame(other);
@@ -61,8 +61,8 @@ public class Participant {
 
     /**
      * Checks for matching firstName, lastName, email and role. If both fields are null that is a match
-     * @param other
-     * @return
+     * @param other compare to
+     * @return true if same
      */
     public boolean isSame(Participant other) {
         return equalsOrNull(this.firstName, other.firstName) && equalsOrNull(this.lastName, other.lastName)
@@ -74,7 +74,7 @@ public class Participant {
      * Checks if the fields are equal (either both null or both string equals). 
      * @param thiz this object
      * @param that comparison field
-     * @return
+     * @return equal or both null result
      */
     private boolean equalsOrNull(String thiz, String that) {
         // both null

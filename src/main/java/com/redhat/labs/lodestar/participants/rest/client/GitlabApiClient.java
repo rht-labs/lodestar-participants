@@ -1,6 +1,6 @@
 package com.redhat.labs.lodestar.participants.rest.client;
 
-import com.redhat.labs.lodestar.participants.exception.ParticipantExcpetion;
+import com.redhat.labs.lodestar.participants.exception.ParticipantException;
 import com.redhat.labs.lodestar.participants.model.GitLabCommit;
 import com.redhat.labs.lodestar.participants.model.Participant;
 import com.redhat.labs.lodestar.participants.service.ParticipantService;
@@ -63,7 +63,7 @@ public class GitlabApiClient {
             }
             String message = String.format("Participant file not retrieved for project %s. Status %s, Reason %s",
                     projectId, e.getHttpStatus(), e.getReason());
-            throw new ParticipantExcpetion(message, e);
+            throw new ParticipantException(message, e);
         }
     }
 
@@ -124,7 +124,7 @@ public class GitlabApiClient {
             gitlabApi.getCommitsApi().createCommit(commit.getProjectId(), payload);
             LOGGER.debug("Participant commit successful {}", commit.getProjectId());
         } catch (GitLabApiException e) {
-            throw new ParticipantExcpetion(String.format("status code %s reason %s", e.getHttpStatus(), e.getReason()), e);
+            throw new ParticipantException(String.format("status code %s reason %s", e.getHttpStatus(), e.getReason()), e);
         }
     }
 

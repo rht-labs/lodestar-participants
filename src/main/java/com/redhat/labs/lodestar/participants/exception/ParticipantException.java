@@ -1,10 +1,10 @@
 package com.redhat.labs.lodestar.participants.exception;
 
-public class ParticipantExcpetion extends RuntimeException {
+public class ParticipantException extends RuntimeException {
 
     private static final long serialVersionUID = 1L;
     
-    public ParticipantExcpetion(String message, Exception ex) {
+    public ParticipantException(String message, Exception ex) {
         super(message, ex);
     }
 
