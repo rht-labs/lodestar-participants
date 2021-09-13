@@ -1,7 +1,6 @@
 package com.redhat.labs.lodestar.participants.service;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -14,25 +13,20 @@ import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.event.Observes;
 import javax.inject.Inject;
 import javax.transaction.Transactional;
-import javax.ws.rs.WebApplicationException;
 
+import com.redhat.labs.lodestar.participants.model.*;
+import com.redhat.labs.lodestar.participants.rest.client.GitlabApiClient;
+import io.quarkus.vertx.ConsumeEvent;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.redhat.labs.lodestar.participants.model.Engagement;
-import com.redhat.labs.lodestar.participants.model.GitlabFile;
-import com.redhat.labs.lodestar.participants.model.GitlabProject;
-import com.redhat.labs.lodestar.participants.model.Participant;
 import com.redhat.labs.lodestar.participants.rest.client.EngagementApiRestClient;
-import com.redhat.labs.lodestar.participants.rest.client.GitlabRestClient;
-import com.redhat.labs.lodestar.participants.utils.JsonMarshaller;
 
 import io.quarkus.panache.common.Page;
 import io.quarkus.panache.common.Sort;
 import io.quarkus.runtime.StartupEvent;
-import io.quarkus.vertx.ConsumeEvent;
 
 @ApplicationScoped
 public class ParticipantService {
@@ -40,11 +34,7 @@ public class ParticipantService {
 
     private static final String ENGAGEMENT_UUID = "engagementUuid";
     public static final String UPDATE_EVENT = "updateEvent";
-    public static final String NO_UPDATE = "noUpdate";
-
-    @Inject
-    @RestClient
-    GitlabRestClient gitlabRestClient;
+    public static final String RESET_EVENT = "resetEvent";
 
     @Inject
     @RestClient
@@ -54,13 +44,7 @@ public class ParticipantService {
     ParticipantRepository participantRepository;
 
     @Inject
-    JsonMarshaller json;
-
-    @ConfigProperty(name = "branch")
-    String branch;
-
-    @ConfigProperty(name = "participant.file")
-    String participantFile;
+    GitlabApiClient gitlabApiClient;
 
     @ConfigProperty(name = "commit.message.prefix")
     String commitMessagePrefix;
@@ -79,10 +63,10 @@ public class ParticipantService {
     @Transactional
     public void refresh() {
 
-        List<Engagement> engagements = engagementRestClient.getAllEngagementProjects();
+        List<Engagement> engagements = engagementRestClient.getAllEngagements();
 
         LOGGER.debug("Engagement count {}", engagements.size());
-        engagements.stream().forEach(this::reloadEngagement);
+        engagements.forEach(this::reloadEngagement);
 
         LOGGER.debug("refresh complete");
     }
@@ -101,7 +85,7 @@ public class ParticipantService {
             LOGGER.error("PROJECT {} DOES NOT HAVE AN ENGAGEMENT UUID ON THE DESCRIPTION", e.getProjectId());
         } else {
 
-            List<Participant> participants = getParticipantsFromGitlab(String.valueOf(e.getProjectId()));
+            List<Participant> participants = gitlabApiClient.getParticipants(e.getProjectId());
 
             for (Participant participant : participants) {
                 LOGGER.trace("u {}", participant);
@@ -148,6 +132,10 @@ public class ParticipantService {
         return participantRepository.count();
     }
 
+    public Map<String, Long> getEngagementCounts() {
+        return participantRepository.getEngagementRollup();
+    }
+
     public Map<String, Long> getParticipantRollup(List<String> region) {
         if(region.isEmpty()) {
             return participantRepository.getParticipantRollup();
@@ -157,21 +145,22 @@ public class ParticipantService {
     }
     
     public Map<String, Map<String, Long>> getParticipantRollupAllRegions() {
-        Map<String, Map<String, Long>> rollup = participantRepository.getParticipantRollupAllRegions();
-        return rollup;
+        return participantRepository.getParticipantRollupAllRegions();
     }
 
+    //consider diffing with javers
     @Transactional
-    public String updateParticipants(List<Participant> participants, String engagementUuid, String region, String authorEmail,
-            String authorName) {
+    public GitLabCommit updateParticipants(List<Participant> participants, String engagementUuid, String region, String authorEmail,
+                                           String authorName) {
 
-        long projectId = getProjectIdFromUuid(engagementUuid);
+        int projectId = getProjectIdFromUuid(engagementUuid);
 
         List<Participant> existingParticipants = getParticipants(engagementUuid);
         
         Set<String> added = new HashSet<>();
         Set<String> updated = new HashSet<>();
         Set<String> unchanged = new HashSet<>();
+        Set<Participant> reset = new HashSet<>();
         
         Set<String> deleted = existingParticipants.stream().map(Participant::getEmail).collect(Collectors.toSet());
 
@@ -198,50 +187,56 @@ public class ParticipantService {
                     participant.setUuid(UUID.randomUUID().toString());
                 }
             }
+
+            if(participant.needsReset()) {
+                LOGGER.debug("Reset {}", participant.getEmail());
+                reset.add(participant);
+            }
+            participant.setReset(null);
         }
     
         deleted.removeAll(updated);
         deleted.removeAll(unchanged);
-        
+
+        GitLabCommit gitLabCommit = GitLabCommit.builder().projectId(projectId)
+                .resetParticipants(reset).authorEmail(authorEmail).authorName(authorName)
+                .engagementUuid(engagementUuid).build();
+
+        //Return here if no changes to participants
         if(added.isEmpty() && updated.isEmpty() && deleted.isEmpty()) {
-            return NO_UPDATE;
+            return gitLabCommit;
         }
 
         deleteParticipants(engagementUuid);
         participantRepository.persist(participants);
         
-        StringBuilder commitMessage = new StringBuilder();
-        commitMessage.append(projectId);
-        commitMessage.append(",");
-        commitMessage.append(commitMessagePrefix);
+        StringBuilder commitMessage = new StringBuilder(commitMessagePrefix);
         commitMessage.append(" ");
         updateCommitMessage(commitMessage, "added", added);
         updateCommitMessage(commitMessage, "updated", updated);
         updateCommitMessage(commitMessage, "deleted", deleted);
 
-        return commitMessage.toString().trim();
+        gitLabCommit.setCommitMessage(commitMessage.toString().trim());
+        gitLabCommit.setUpdateRequired(true);
+
+        return gitLabCommit;
     }
     
     private void updateCommitMessage(StringBuilder commitMessage, String type, Collection<String> changes) {
         
         if(changes.size() > 2) {
-            commitMessage.append(changes.size());
-            commitMessage.append(" ");
-            commitMessage.append(type);
-            commitMessage.append(". ");
+            commitMessage.append(String.format("%d %s. %s ", changes.size(), type, getEmoji()));
         } else if(!changes.isEmpty()) {
-            changes.stream().forEach(ch -> commitMessage.append(ch + " ")); 
-            commitMessage.append(type);
-            commitMessage.append(". ");
+            changes.forEach(ch -> commitMessage.append(String.format("%s %s. %s", ch, type, getEmoji())));
         }
         
     }
     
     /**
      * No need to set region here since it's data from gitlab and should already have it
-     * @param participant
-     * @param engagementUuid
-     * @param projectId
+     * @param participant will be modified
+     * @param engagementUuid uuid
+     * @param projectId id of project
      */
     private void fillOutParticipant(Participant participant, String engagementUuid, long projectId) {
         fillOutParticipant(participant, engagementUuid, participant.getRegion(), projectId);
@@ -250,10 +245,10 @@ public class ParticipantService {
     /**
      * Region should be sent into the api payload and added to the participant. Region is the same
      * per engagement id.
-     * @param participant
-     * @param engagementUuid
-     * @param region
-     * @param projectId
+     * @param participant will be modified
+     * @param engagementUuid uuid
+     * @param region region of engagement
+     * @param projectId id of project
      */
     private void fillOutParticipant(Participant participant, String engagementUuid, String region, long projectId) {
         String org = participant.getEmail().toLowerCase().endsWith("@redhat.com") ? "Red Hat" : "Others";
@@ -263,9 +258,8 @@ public class ParticipantService {
         participant.setRegion(region);
     }
 
-    private long getProjectIdFromUuid(String engagementUuid) {
-        GitlabProject p = engagementRestClient.getProject(engagementUuid);
-        return p.getId();
+    private int getProjectIdFromUuid(String engagementUuid) {
+        return engagementRestClient.getEngagement(engagementUuid).getProjectId();
     }
 
     private long deleteParticipants(String engagementUuid) {
@@ -275,45 +269,39 @@ public class ParticipantService {
         return deletedRows;
     }
 
-    private List<Participant> getParticipantsFromGitlab(String projectIdOrPath) {
+    /**
+     * This will process resets with participant update
+     * @param commit 5 part method - uuid,projectId,message,authorEmail,authorName
+     */
+    @ConsumeEvent(value = ParticipantService.UPDATE_EVENT, blocking = true)
+    @Transactional
+    public void updateParticipants(GitLabCommit commit) {
+        List<Participant> participants = getParticipants(commit.getEngagementUuid());
 
-        try {
-            GitlabFile file = gitlabRestClient.getFile(projectIdOrPath, participantFile, branch);
-            file.decodeFileAttributes();
-            return json.fromJson(file.getContent());
-        } catch (WebApplicationException ex) {
-            if (ex.getResponse().getStatus() != 404) {
-                LOGGER.error("Error ({}) fetching participant file for project {}", ex.getResponse().getStatus(), projectIdOrPath);
-                throw ex;
-            }
-            LOGGER.error("No participant file found for {} {}", projectIdOrPath, ex.getMessage());
-            return Collections.emptyList();
-        } catch (RuntimeException ex) {
-            LOGGER.error("Failure retrieving file {} {}", projectIdOrPath, ex.getMessage(), ex);
-            return Collections.emptyList();
-        }
+        gitlabApiClient.updateParticipants(commit, participants);
+        engagementRestClient.updateParticipantCount(commit.getEngagementUuid(), participants.size());
+
     }
 
     /**
-     * 
-     * @param message 3 part method - uuid,authorEmail,authorName
+     * Reset only - no participant updates
+     * @param commit The changes
      */
-    @ConsumeEvent(value = UPDATE_EVENT, blocking = true)
+    @ConsumeEvent(value = ParticipantService.RESET_EVENT, blocking = true)
     @Transactional
-    public void updateParticipantsInGitlab(String message) {
-        LOGGER.debug("Gitlabbing participants - {}", message);
+    public void resetParticipants(GitLabCommit commit) {
+        gitlabApiClient.resetParticipants(commit);
+    }
 
-        String[] uuidProjectMessageEmailName = message.split(",");
+    private String getEmoji() {
+        String bear = "\ud83d\udc3b";
 
-        List<Participant> participants = getParticipants(uuidProjectMessageEmailName[0]);
+        int bearCodePoint = bear.codePointAt(bear.offsetByCodePoints(0, 0));
+        int mysteryAnimalCodePoint = bearCodePoint + new java.security.SecureRandom().nextInt(144);
+        char[] mysteryEmoji = { Character.highSurrogate(mysteryAnimalCodePoint),
+                Character.lowSurrogate(mysteryAnimalCodePoint) };
 
-        String content = json.toJson(participants);
-        GitlabFile file = GitlabFile.builder().filePath(participantFile).content(content).commitMessage(uuidProjectMessageEmailName[2])
-                .branch(branch).authorEmail(uuidProjectMessageEmailName[3]).authorName(uuidProjectMessageEmailName[4]).build();
-        file.encodeFileAttributes();
-
-        gitlabRestClient.updateFile(uuidProjectMessageEmailName[1], participantFile, file);
-
+        return String.valueOf(mysteryEmoji);
     }
 
 }

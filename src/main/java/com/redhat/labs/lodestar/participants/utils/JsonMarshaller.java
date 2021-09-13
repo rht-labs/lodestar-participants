@@ -15,7 +15,7 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.SerializationFeature;
-import com.redhat.labs.lodestar.participants.exception.ParticipantExcpetion;
+import com.redhat.labs.lodestar.participants.exception.ParticipantException;
 import com.redhat.labs.lodestar.participants.model.Participant;
 
 import io.quarkus.runtime.StartupEvent;
@@ -39,20 +39,30 @@ public class JsonMarshaller {
         om.setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
     }
 
-    public List<Participant> fromJson(String json) {
-        try {
-            return om.readValue(json, new TypeReference<List<Participant>>() {
+    public Participant fromJson(String json) {
+        return fromJson(json, new TypeReference<Participant>() {
             });
+
+    }
+
+    public List<Participant> fromJsonList(String json) {
+        return fromJson(json, new TypeReference<List<Participant>>() {
+            });
+    }
+
+    private <T> T fromJson(String json, TypeReference<T> type) {
+        try {
+            return om.readValue(json, type);
         } catch (JsonProcessingException e) {
-            throw new ParticipantExcpetion("Error translating participant json data", e);
+            throw new ParticipantException("Error translating participant json data", e);
         }
     }
 
-    public String toJson(List<Participant> participants) {
+    public String toJson(Object participants) {
         try {
             return om.writeValueAsString(participants);
         } catch (JsonProcessingException e) {
-            throw new ParticipantExcpetion("Error translating participant data to json", e);
+            throw new ParticipantException("Error translating participant data to json", e);
         }
     }
 

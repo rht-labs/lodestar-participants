@@ -12,6 +12,6 @@ import lombok.NoArgsConstructor;
 public class Engagement {
 
     private String uuid;
-    private long projectId;
+    private int projectId;
     
 }

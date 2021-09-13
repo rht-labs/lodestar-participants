@@ -1,19 +1,15 @@
 package com.redhat.labs.lodestar.participants.service;
 
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
 import javax.inject.Inject;
-import javax.ws.rs.WebApplicationException;
 
+import com.redhat.labs.lodestar.participants.exception.ParticipantException;
+import com.redhat.labs.lodestar.participants.model.GitLabCommit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -23,6 +19,8 @@ import com.redhat.labs.lodestar.participants.model.Participant;
 
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
+
+import static org.junit.jupiter.api.Assertions.*;
 
 @QuarkusTest
 @QuarkusTestResource(ExternalApiWireMock.class)
@@ -102,11 +100,9 @@ class ParticipantServiceTest {
     @Test
     void testReloadEngagementFailure() {
         Engagement engagement = Engagement.builder().projectId(99).uuid("99uuid99").build();
-        WebApplicationException ex = assertThrows(WebApplicationException.class, () -> {
-            participantService.reloadEngagement(engagement);
-        });
+        ParticipantException ex = assertThrows(ParticipantException.class, () -> participantService.reloadEngagement(engagement));
         
-        assertEquals(500, ex.getResponse().getStatus());
+        assertEquals("Participant file not retrieved for project 99. Status 500, Reason Server Error", ex.getMessage());
     }
     
     @Test
@@ -133,7 +129,7 @@ class ParticipantServiceTest {
     
     @Test
     void testGetParticipantsAcrossEngagements() {
-        List<String> uuids = new ArrayList<String>();
+        List<String> uuids = new ArrayList<>();
         uuids.add("second");
         uuids.add("cb570945-a209-40ba-9e42-63a7993baf4d");
         
@@ -149,9 +145,16 @@ class ParticipantServiceTest {
     void testUpdateParticipants() {
        List<Participant> participants = new ArrayList<>();
        participants.add(Participant.builder().uuid("uuid").email("joe@schmo.com").firstName("Joe").lastName("Schmo").role("schmo").build());
-       String update = participantService.updateParticipants(participants, "cb570945-a209-40ba-9e42-63a7993baf4d", "na", "bo@bo.com", "Bo Bichette"); 
-       
-       assertEquals("13065,Participants: joe@schmo.com added. 3 deleted.", update);
+       GitLabCommit update = participantService.updateParticipants(participants, "cb570945-a209-40ba-9e42-63a7993baf4d", "na", "bo@bo.com", "Bo Bichette");
+
+       assertNotNull(update);
+       assertEquals("cb570945-a209-40ba-9e42-63a7993baf4d", update.getEngagementUuid());
+       assertEquals(13065, update.getProjectId());
+       assertTrue(update.getCommitMessage().startsWith("Participants: joe@schmo.com added."));
+       assertTrue(update.getCommitMessage().contains("3 deleted."));
+       assertEquals(0, update.getResetParticipants().size());
+       assertEquals("bo@bo.com", update.getAuthorEmail());
+       assertEquals("Bo Bichette", update.getAuthorName());
        
        List<Participant> result = participantService.getParticipants("cb570945-a209-40ba-9e42-63a7993baf4d");
        
@@ -162,10 +165,10 @@ class ParticipantServiceTest {
     @Test
     void testUpdateParticipantsNoUpdate() {
        List<Participant> participants = participantService.getParticipants("cb570945-a209-40ba-9e42-63a7993baf4d");
-       
-       String update = participantService.updateParticipants(participants, "cb570945-a209-40ba-9e42-63a7993baf4d","na", "bo@bo.com", "Bo Bichette");
-       
-       assertEquals(ParticipantService.NO_UPDATE, update);
+
+       GitLabCommit update = participantService.updateParticipants(participants, "cb570945-a209-40ba-9e42-63a7993baf4d","na", "bo@bo.com", "Bo Bichette");
+
+       assertFalse(update.isUpdateRequired());
        
        List<Participant> result = participantService.getParticipants("cb570945-a209-40ba-9e42-63a7993baf4d");
        
@@ -173,6 +176,12 @@ class ParticipantServiceTest {
        assertEquals(participants.get(0), result.get(0));
        assertEquals(participants.get(1), result.get(1));
        assertEquals(participants.get(2), result.get(2));
+    }
+
+    @Test
+    void testResetOnly() {
+        List<Participant> participants = participantService.getParticipants("cb570945-a209-40ba-9e42-63a7993baf4d");
+        participants.forEach(p -> p.setReset(true));
     }
     
 }
