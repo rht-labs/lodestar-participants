@@ -150,7 +150,8 @@ class ParticipantServiceTest {
        assertNotNull(update);
        assertEquals("cb570945-a209-40ba-9e42-63a7993baf4d", update.getEngagementUuid());
        assertEquals(13065, update.getProjectId());
-       assertEquals("Participants: joe@schmo.com added. 3 deleted.", update.getCommitMessage());
+       assertTrue(update.getCommitMessage().startsWith("Participants: joe@schmo.com added."));
+       assertTrue(update.getCommitMessage().contains("3 deleted."));
        assertEquals(0, update.getResetParticipants().size());
        assertEquals("bo@bo.com", update.getAuthorEmail());
        assertEquals("Bo Bichette", update.getAuthorName());

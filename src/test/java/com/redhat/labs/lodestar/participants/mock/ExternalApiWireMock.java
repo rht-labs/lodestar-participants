@@ -20,21 +20,21 @@ public class ExternalApiWireMock implements QuarkusTestResourceLifecycleManager 
         
         String body = ResourceLoader.load("seed-engagement.json");
         
-        stubFor(get(urlEqualTo("/api/v1/engagements/projects")).willReturn(aResponse()
+        stubFor(get(urlEqualTo("/api/v2/engagements")).willReturn(aResponse()
                 .withHeader("Content-Type",  "application/json")
                 .withBody(body)
                 ));
         
-        body = ResourceLoader.load("gitlab-project-13065.json");
+        body = ResourceLoader.load("engagement-13065.json");
         
-        stubFor(get(urlEqualTo("/api/v1/engagements/projects/cb570945-a209-40ba-9e42-63a7993baf4d")).willReturn(aResponse()
+        stubFor(get(urlEqualTo("/api/v2/engagements/cb570945-a209-40ba-9e42-63a7993baf4d")).willReturn(aResponse()
                 .withHeader("Content-Type",  "application/json")
                 .withBody(body)
                 ));
         
-        body = ResourceLoader.load("gitlab-project-20962.json");
+        body = ResourceLoader.load("engagement-20962.json");
         
-        stubFor(get(urlEqualTo("/api/v1/engagements/projects/second")).willReturn(aResponse()
+        stubFor(get(urlEqualTo("/api/v2/engagements/second")).willReturn(aResponse()
                 .withHeader("Content-Type",  "application/json")
                 .withBody(body)
                 ));
