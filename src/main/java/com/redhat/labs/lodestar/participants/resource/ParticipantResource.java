@@ -89,6 +89,12 @@ public class ParticipantResource {
         
         return Response.ok().header(TOTAL_PARTICIPANTS, participantCount).build();
     }
+
+    @GET
+    @Path("engagements/counts")
+    public Map<String, Long> getEngagementCounts() {
+        return participantService.getEngagementCounts();
+    }
     
     @GET
     @Path("/enabled")

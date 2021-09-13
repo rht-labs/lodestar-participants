@@ -109,7 +109,7 @@ class ParticipantResourceTest {
                 .statusCode(200).header("x-total-participants", equalTo("3")).body("size()", is(3)).body("email", hasItems("mac4@riot.com"))
                 .body("first_name", hasItems("Update"));
 
-        verify(gitlabApiClient, times(1)).updateParticipants(any(GitLabCommit.class));
+        verify(gitlabApiClient, times(1)).updateParticipants(any(GitLabCommit.class), anyList());
     }
     
     @Test
@@ -121,7 +121,7 @@ class ParticipantResourceTest {
         given().header("Content-Type", "application/json").pathParam("engagementUuid", engagementUuid).pathParam("region", "na").body(participants)
                 .put("engagements/uuid/{engagementUuid}/{region}").then().statusCode(200);
 
-        verify(gitlabApiClient, times(0)).updateParticipants(any(GitLabCommit.class));
+        verify(gitlabApiClient, times(0)).updateParticipants(any(GitLabCommit.class), anyList());
 
     }
 

@@ -63,7 +63,7 @@ public class ParticipantService {
     @Transactional
     public void refresh() {
 
-        List<Engagement> engagements = engagementRestClient.getAllEngagementProjects();
+        List<Engagement> engagements = engagementRestClient.getAllEngagements();
 
         LOGGER.debug("Engagement count {}", engagements.size());
         engagements.forEach(this::reloadEngagement);
@@ -130,6 +130,10 @@ public class ParticipantService {
 
     public long getParticipantCount() {
         return participantRepository.count();
+    }
+
+    public Map<String, Long> getEngagementCounts() {
+        return participantRepository.getEngagementRollup();
     }
 
     public Map<String, Long> getParticipantRollup(List<String> region) {
@@ -221,14 +225,9 @@ public class ParticipantService {
     private void updateCommitMessage(StringBuilder commitMessage, String type, Collection<String> changes) {
         
         if(changes.size() > 2) {
-            commitMessage.append(changes.size());
-            commitMessage.append(" ");
-            commitMessage.append(type);
-            commitMessage.append(". ");
+            commitMessage.append(String.format("%d %s. %s ", changes.size(), type, getEmoji()));
         } else if(!changes.isEmpty()) {
-            changes.forEach(ch -> commitMessage.append(ch + " "));
-            commitMessage.append(type);
-            commitMessage.append(". ");
+            changes.forEach(ch -> commitMessage.append(String.format("%s %s. %s", ch, type, getEmoji())));
         }
         
     }
@@ -260,8 +259,7 @@ public class ParticipantService {
     }
 
     private int getProjectIdFromUuid(String engagementUuid) {
-        GitlabProject p = engagementRestClient.getProject(engagementUuid);
-        return p.getId();
+        return engagementRestClient.getEngagement(engagementUuid).getProjectId();
     }
 
     private long deleteParticipants(String engagementUuid) {
@@ -278,7 +276,11 @@ public class ParticipantService {
     @ConsumeEvent(value = ParticipantService.UPDATE_EVENT, blocking = true)
     @Transactional
     public void updateParticipants(GitLabCommit commit) {
-        gitlabApiClient.updateParticipants(commit);
+        List<Participant> participants = getParticipants(commit.getEngagementUuid());
+
+        gitlabApiClient.updateParticipants(commit, participants);
+        engagementRestClient.updateParticipantCount(commit.getEngagementUuid(), participants.size());
+
     }
 
     /**
@@ -289,6 +291,17 @@ public class ParticipantService {
     @Transactional
     public void resetParticipants(GitLabCommit commit) {
         gitlabApiClient.resetParticipants(commit);
+    }
+
+    private String getEmoji() {
+        String bear = "\ud83d\udc3b";
+
+        int bearCodePoint = bear.codePointAt(bear.offsetByCodePoints(0, 0));
+        int mysteryAnimalCodePoint = bearCodePoint + new java.security.SecureRandom().nextInt(144);
+        char[] mysteryEmoji = { Character.highSurrogate(mysteryAnimalCodePoint),
+                Character.lowSurrogate(mysteryAnimalCodePoint) };
+
+        return String.valueOf(mysteryEmoji);
     }
 
 }

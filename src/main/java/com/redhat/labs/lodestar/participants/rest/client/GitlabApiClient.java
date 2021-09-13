@@ -67,9 +67,7 @@ public class GitlabApiClient {
         }
     }
 
-    public void updateParticipants(GitLabCommit commit) {
-        List<Participant> participants = participantService.getParticipants(commit.getEngagementUuid());
-
+    public void updateParticipants(GitLabCommit commit, List<Participant> participants) {
         String participantContent = json.toJson(participants);
 
         List<CommitAction> commitFiles = new ArrayList<>();

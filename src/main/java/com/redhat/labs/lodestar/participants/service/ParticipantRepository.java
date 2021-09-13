@@ -19,10 +19,17 @@ public class ParticipantRepository implements PanacheRepository<Participant> {
     private final static String ROLLUP_QUERY = "SELECT organization as organization, count(distinct email) as total FROM Participant WHERE region is not null GROUP BY ROLLUP(organization)";
     private final static String ROLLUP_REGION_QUERY = "SELECT organization as organization, count(distinct email) as total FROM Participant WHERE region in :region GROUP BY ROLLUP(organization)";
     private final static String ROLLUP_ALL_REGION_QUERY = "SELECT region as region, organization as organization, count(distinct email) as total FROM Participant WHERE region is not null GROUP BY CUBE (region, organization)";
+    private final static String COUNT_FOR_EACH_ENGAGEMENT = "SELECT engagementUuid as engagementUuid, count(distinct email) as total FROM Participant GROUP BY engagementUuid";
 
     public Map<String, Long> getParticipantRollup() {
         return getEntityManager().createQuery(ROLLUP_QUERY, Tuple.class).getResultStream()
-                .collect(Collectors.toMap(tuple -> ((String) tuple.get("organization")) == null ? "All" : ((String) tuple.get("organization")),
+                .collect(Collectors.toMap(tuple -> (tuple.get("organization")) == null ? "All" : ((String) tuple.get("organization")),
+                        tuple -> ((Number) tuple.get("total")).longValue()));
+    }
+
+    public Map<String, Long> getEngagementRollup() {
+        return getEntityManager().createQuery(COUNT_FOR_EACH_ENGAGEMENT, Tuple.class).getResultStream()
+                .collect(Collectors.toMap(tuple -> ((String) tuple.get("engagementUuid")),
                         tuple -> ((Number) tuple.get("total")).longValue()));
     }
     
@@ -31,12 +38,12 @@ public class ParticipantRepository implements PanacheRepository<Participant> {
         Map<String, Map<String, Long>> doubleMap = new HashMap<>();
         
         getEntityManager().createQuery(ROLLUP_ALL_REGION_QUERY, Tuple.class).getResultStream().forEach(tuple -> {
-            String region = (String) tuple.get("region") == null ? "All" : ((String) tuple.get("region"));
-            String organization = (String) tuple.get("organization") == null ? "All" : ((String) tuple.get("organization"));
+            String region = tuple.get("region") == null ? "All" : ((String) tuple.get("region"));
+            String organization = tuple.get("organization") == null ? "All" : ((String) tuple.get("organization"));
             long total = ((Number) tuple.get("total")).longValue();
                       
             if(!doubleMap.containsKey(region)) {
-               doubleMap.put(region, new HashMap<String, Long>()); 
+               doubleMap.put(region, new HashMap<>());
             }
             Map<String, Long> innerMap = doubleMap.get(region);
             innerMap.put(organization, total);
@@ -47,7 +54,7 @@ public class ParticipantRepository implements PanacheRepository<Participant> {
 
     public Map<String, Long> getParticipantRollup(List<String> region) {
         return getEntityManager().createQuery(ROLLUP_REGION_QUERY, Tuple.class).setParameter("region", region).getResultStream()
-                .collect(Collectors.toMap(tuple -> ((String) tuple.get("organization")) == null ? "All" : ((String) tuple.get("organization")),
+                .collect(Collectors.toMap(tuple -> (tuple.get("organization")) == null ? "All" : ((String) tuple.get("organization")),
                         tuple -> ((Number) tuple.get("total")).longValue()));
     }
     
