@@ -1,1 +1,1 @@
-{"query":"query totalParticipants {\n  totalParticipants\n  allParticipants(page: 0, pageSize:10) {\n    uuid\n    projectId\n    engagementUuid\n    firstName\n    lastName \n  }\n}\n","variables":null,"operationName":"totalParticipants"}
+{"query":"query totalParticipants {\n  totalParticipants\n  allParticipants(page: 0, pageSize:10) {\n    uuid\n    projectId\n    engagementUuid\n    first_name\n    last_name \n  }\n}\n","variables":null,"operationName":"totalParticipants"}

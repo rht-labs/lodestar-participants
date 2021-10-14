@@ -1,5 +1,9 @@
 package com.redhat.labs.lodestar.participants.rest.client;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.redhat.labs.lodestar.participants.exception.ParticipantException;
 import com.redhat.labs.lodestar.participants.model.GitLabCommit;
 import com.redhat.labs.lodestar.participants.model.Participant;
@@ -18,6 +22,7 @@ import javax.inject.Inject;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 @ApplicationScoped
 public class GitlabApiClient {
@@ -35,6 +40,9 @@ public class GitlabApiClient {
     @ConfigProperty(name = "participant.file")
     String participantFile;
 
+    @ConfigProperty(name = "legacy.engagement.file")
+    String engagementFile;
+
     @ConfigProperty(name = "user.management.file")
     String userManagementFormat;
 
@@ -46,6 +54,8 @@ public class GitlabApiClient {
 
     GitLabApi gitlabApi;
 
+    Gson gson = new GsonBuilder().setPrettyPrinting().create();
+
     @PostConstruct
     void setupGitlabClient() {
         gitlabApi = new GitLabApi(gitUrl, pat);
@@ -53,18 +63,13 @@ public class GitlabApiClient {
     }
 
     public List<Participant> getParticipants(Integer projectId) {
-        try {
-            RepositoryFile file = gitlabApi.getRepositoryFileApi().getFile(projectId, participantFile, branch);
-            return json.fromJsonList(file.getDecodedContentAsString());
-        } catch (GitLabApiException e) {
-            if(e.getHttpStatus() == 404) {
-                LOGGER.debug("Could find not file {} for project {}", participantFile, projectId);
-                return Collections.emptyList();
-            }
-            String message = String.format("Participant file not retrieved for project %s. Status %s, Reason %s",
-                    projectId, e.getHttpStatus(), e.getReason());
-            throw new ParticipantException(message, e);
+        RepositoryFile file = getFile(projectId, participantFile, true);
+
+        if(file == null) {
+            return Collections.emptyList();
         }
+
+        return json.fromJsonList(file.getDecodedContentAsString());
     }
 
     public void updateParticipants(GitLabCommit commit, List<Participant> participants) {
@@ -78,6 +83,8 @@ public class GitlabApiClient {
                 .withContent(participantContent);
 
         commitFiles.add(action);
+
+        commitFiles.add(createLegacyJson(commit.getProjectId(), participantContent));
 
         if(!commit.getResetParticipants().isEmpty()) { //Count users who already have a reset pending (file already exists)
             String updateMessage = String.format("%s \n Reset %d user(s)", commit.getCommitMessage(),
@@ -128,15 +135,48 @@ public class GitlabApiClient {
 
     private void createResetAction(Participant reset, int projectId, List<CommitAction> commitFiles) {
         String filePath = String.format(userManagementFormat, reset.getUuid());
-        try { //200 response means it already exists
-            gitlabApi.getRepositoryFileApi().getFile(projectId, filePath, branch, false);
-        } catch (GitLabApiException e) {
-            if(e.getHttpStatus() == 404) {
-                String resetContent = json.toJson(reset);
-                CommitAction resetAction = new CommitAction().withAction(CommitAction.Action.CREATE)
-                        .withFilePath(filePath).withContent(resetContent);
-                commitFiles.add(resetAction);
-            }
+        if(getFile(projectId, filePath, false) == null) {
+
+            String resetContent = json.toJson(reset);
+            CommitAction resetAction = new CommitAction().withAction(CommitAction.Action.CREATE)
+                    .withFilePath(filePath).withContent(resetContent);
+            commitFiles.add(resetAction);
         }
     }
+
+    private CommitAction createLegacyJson(int projectId, String partipantsJson) {
+
+        RepositoryFile legacyEngagementFile = getFile(projectId, "engagement.json", true);
+
+        JsonElement element = gson.fromJson(legacyEngagementFile.getDecodedContentAsString(), JsonElement.class);
+        JsonObject engagement = element.getAsJsonObject();
+
+        element = gson.fromJson(partipantsJson, JsonElement.class);
+
+        engagement.add("engagement_users", element);
+        JsonObject sorted = new JsonObject();
+        engagement.entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(es -> sorted.add(es.getKey(), es.getValue()));
+
+        String legacyContent = gson.toJson(sorted);
+
+        return new CommitAction()
+                .withAction(CommitAction.Action.UPDATE)
+                .withFilePath(engagementFile)
+                .withContent(legacyContent);
+    }
+
+    private RepositoryFile getFile(int projectId, String filePath, boolean includeContent) {
+        try {
+            return gitlabApi.getRepositoryFileApi().getFile(projectId, filePath, branch, includeContent);
+        } catch (GitLabApiException e) {
+            if(e.getHttpStatus() == 404) {
+                LOGGER.debug("Could find not file {} for project {}", filePath, projectId);
+                return null;
+            }
+            String message = String.format("File %s not retrieved for project %s. Status %s, Reason %s", filePath,
+                    projectId, e.getHttpStatus(), e.getReason());
+            throw new ParticipantException(message, e);
+        }
+    }
+
 }
