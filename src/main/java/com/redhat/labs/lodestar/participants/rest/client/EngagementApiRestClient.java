@@ -10,7 +10,6 @@ import org.eclipse.microprofile.faulttolerance.Retry;
 import org.eclipse.microprofile.rest.client.inject.RegisterRestClient;
 
 import com.redhat.labs.lodestar.participants.model.Engagement;
-import com.redhat.labs.lodestar.participants.model.GitlabProject;
 
 @Retry(maxRetries = 5, delay = 1200, retryOn = NoHttpResponseException.class, abortOn = WebApplicationException.class)
 @RegisterRestClient(configKey = "engagement.api")

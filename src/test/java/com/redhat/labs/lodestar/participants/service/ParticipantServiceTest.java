@@ -102,7 +102,7 @@ class ParticipantServiceTest {
         Engagement engagement = Engagement.builder().projectId(99).uuid("99uuid99").build();
         ParticipantException ex = assertThrows(ParticipantException.class, () -> participantService.reloadEngagement(engagement));
         
-        assertEquals("Participant file not retrieved for project 99. Status 500, Reason Server Error", ex.getMessage());
+        assertEquals("File engagement/participants.json not retrieved for project 99. Status 500, Reason Server Error", ex.getMessage());
     }
     
     @Test

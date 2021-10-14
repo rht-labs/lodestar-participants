@@ -46,6 +46,12 @@ public class ExternalApiWireMock implements QuarkusTestResourceLifecycleManager 
                 .withBody(body)
                 ));
 
+        body = ResourceLoader.load("gitlab-file-engagement.json");
+
+        stubFor(get(urlEqualTo("/api/v4/projects/13065/repository/files/engagement%2Ejson?ref=master")).willReturn(aResponse()
+                .withHeader("Content-Type",  "application/json")
+                .withBody(body)
+        ));
         
         body = ResourceLoader.load("gitlab-file-users-20962.json");
         
@@ -74,6 +80,9 @@ public class ExternalApiWireMock implements QuarkusTestResourceLifecycleManager 
         stubFor(headUserManagement(13065, "uuid", 404));
         stubFor(headUserManagement(13065, "3634ce4%2D71c7%2D4509%2D8f69%2D980e399f5ce8", 404));
         stubFor(headUserManagement(13065, "9975ea17%2Db305%2D4424%2Da9c7%2Dd452faa6e5d4", 404));
+
+        stubFor(put(urlEqualTo("/api/v2/engagements/cb570945-a209-40ba-9e42-63a7993baf4d/participants/3")).willReturn(aResponse()
+                .withStatus(200)));
 
         Map<String, String> config = new HashMap<>();
         config.put("gitlab4j.api.url", wireMockServer.baseUrl());
