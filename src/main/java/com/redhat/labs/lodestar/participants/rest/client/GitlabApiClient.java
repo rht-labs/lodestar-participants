@@ -58,6 +58,11 @@ public class GitlabApiClient {
 
     @PostConstruct
     void setupGitlabClient() {
+        gitUrl = gitUrl.trim();
+        pat = pat.trim();
+
+        LOGGER.info("Using git {}", gitUrl);
+
         gitlabApi = new GitLabApi(gitUrl, pat);
         gitlabApi.enableRequestResponseLogging();
     }

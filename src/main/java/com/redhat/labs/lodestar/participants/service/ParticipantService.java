@@ -16,6 +16,7 @@ import javax.transaction.Transactional;
 
 import com.redhat.labs.lodestar.participants.model.*;
 import com.redhat.labs.lodestar.participants.rest.client.GitlabApiClient;
+import io.quarkus.scheduler.Scheduled;
 import io.quarkus.vertx.ConsumeEvent;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
@@ -49,7 +50,8 @@ public class ParticipantService {
     @ConfigProperty(name = "commit.message.prefix")
     String commitMessagePrefix;
 
-    void onStart(@Observes StartupEvent ev) {
+    @Scheduled(every = "2m")
+    void checkDBPopulation() {
         long count = participantRepository.count();
         LOGGER.debug("There are {} participant in the participant db.", count);
 

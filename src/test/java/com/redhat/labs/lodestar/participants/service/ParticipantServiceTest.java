@@ -96,6 +96,16 @@ class ParticipantServiceTest {
         
         assertEquals(6, participantService.getParticipantCount());
     }
+
+    @Test
+    void testCheckDBPopTwice() {
+        participantService.purge();
+        participantService.checkDBPopulation();
+        assertEquals(6, participantService.getParticipantCount());
+
+        participantService.checkDBPopulation();
+        assertEquals(6, participantService.getParticipantCount());
+    }
     
     @Test
     void testReloadEngagementFailure() {
